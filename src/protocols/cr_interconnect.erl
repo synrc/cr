@@ -8,9 +8,12 @@ sup() -> interconnect_sup.
 init([Name,Mod,Socket]) -> #state{name=Name,module=Mod,socket=Socket}.
 
 dispatch({'add_iterator',Object},State)  ->
+    kvs:add(Object),
     State;
 
-dispatch({'get_container',Object},State)  ->
+dispatch({'get_container',Table,Key},#state{socket=Socket}=State)  ->
+    {ok,Record}=kvs:get(Table,Key),
+    gen_tcp:send(Socket,)
     State.
 
 ring() -> cr_hash:fresh(5,node()).
