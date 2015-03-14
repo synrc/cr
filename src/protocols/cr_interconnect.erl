@@ -5,9 +5,7 @@
 -record(state, {succ,pred,port,name,socket,module}).
 
 sup() -> interconnect_sup.
-
-init([Name,Mod,Socket]) ->
-    #state{name=Name,module=Mod,socket=Socket}.
+init([Name,Mod,Socket]) -> #state{name=Name,module=Mod,socket=Socket}.
 
 dispatch({'add_iterator',Object},State)  ->
     State;

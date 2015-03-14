@@ -2,24 +2,23 @@
 -copyright('Maxim Sokhatsky').
 -compile(export_all).
 
-tcp(Name,Port,Mod) -> { Name,{cr_tcp,start_link,[Name,Port,Mod]},permanent,2000,worker,[cr_tcp]}.
+tcp(Name,Port,Mod,HashRing) -> { Name,{cr_tcp,start_link,[Name,Port,Mod,HashRing]},permanent,2000,worker,[cr_tcp]}.
 sup(SupName) -> { SupName,{supervisor,start_link,[{local,SupName},cr_connection,[]]},
                                  permanent,infinity,supervisor,[]}.
 
-init(Opts) ->
-    {ok, {{one_for_one, 5, 60}, lists:flatten([ protocol(O) || O<-Opts ])
+init(HashRingt,Opts) ->
+    {ok, {{one_for_one, 5, 60}, lists:flatten([ protocol(O,HashRing) || O<-Opts ])
                                        ++ [ sup(vnode_sup) ] }}.
 stop(_)    -> ok.
 start(_,_) ->
-    Res = supervisor:start_link({local, cr_sup}, ?MODULE,
-                [ { interconnect, 9000, cr_interconnect },
+    HashRing = {Partitions,VNodes} = cr_hash:fresh(40,node()),
+    [ cr_vnode:start_vnode({Index,Node},HashRing) || {Index,Node} <- VNodes ],
+    supervisor:start_link({local, cr_sup}, ?MODULE,
+                [HashRing,[ { interconnect, 9000, cr_interconnect },
                   { ping,         9001, cr_ping },
-                  { client,       9002, cr_client } ]),
-    {Partitions,VNodes} = cr_hash:fresh(40,node()),
-    [ cr_vnode:start_vnode({Index,Node}) || {Index,Node} <- VNodes ],
-    Res.
+                  { client,       9002, cr_client } ]]).
 
-protocol({Name,Port,Mod}) ->
+protocol({Name,Port,Mod},HashRing) ->
   SupName = list_to_atom(lists:concat([Name,'_sup'])),
-  [ tcp(Name,Port,Mod),   % TCP listener gen_server
+  [ tcp(Name,Port,Mod,HashRing),   % TCP listener gen_server
     sup(SupName)        ]. % Accepted Clients Supervisor

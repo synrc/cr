@@ -3,12 +3,12 @@
 -include("cr.hrl").
 -behaviour(gen_fsm).
 -compile(export_all).
--record(state, {port,name,socket,module,peer,state}).
+-record(state, {port,name,socket,module,peer,state,ring}).
 -export(?GEN_FSM).
 -export([listen/2, transfer/2]).
 -define(TIMEOUT, 60000).
 
-start_connection(Module,Socket) ->
+start_connection(Module,Socket,HashRing) ->
     {ok, {IP,Port}} = try inet:peername(Socket) catch _:_ -> {ok,{{127,0,0,1},now()}} end,
     Restart = permanent,
     Shutdown = 2000,

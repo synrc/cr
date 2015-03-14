@@ -4,13 +4,13 @@
 -include("cr.hrl").
 -export(?GEN_SERVER).
 -compile(export_all).
--record(state, {listener,acceptor,module,name,port}).
+-record(state, {listener,acceptor,module,name,port,ring}).
 
 handle_info({inet_async,ListSock,Ref,Message},
-    #state{listener=ListSock,acceptor=Ref,module=Module,name=Name,port=Port} = State) ->
+    #state{listener=ListSock,acceptor=Ref,module=Module,name=Name,port=Port,ring=HashRing} = State) ->
     {ok,CliSocket} = Message,
     set_sockopt(ListSock, CliSocket),
-    {ok, Pid} = cr_connection:start_connection(Module,CliSocket),
+    {ok, Pid} = cr_connection:start_connection(Module,CliSocket,HashRing),
     gen_tcp:controlling_process(CliSocket, Pid),
     cr:set_socket(Pid, CliSocket),
     Acceptor = case prim_inet:async_accept(ListSock, -1) of
@@ -29,7 +29,7 @@ handle_cast(_Msg, State) -> {noreply, State}.
 start_link(Name, Port, Module) ->
     gen_server:start_link({local, Name}, ?MODULE, [Name, Port, Module], []).
 
-init([Name, Port, Module]) ->
+init([Name, Port, Module, HashRing]) ->
     process_flag(trap_exit, true),
     Opts = [binary,{packet,0},{reuseaddr,true},{keepalive,true},{backlog,30},{active,false}],
     case gen_tcp:listen(Port, Opts) of
@@ -37,6 +37,7 @@ init([Name, Port, Module]) ->
 	          {ok, Ref} = prim_inet:async_accept(Listen_socket, -1),
               {ok, #state{ listener = Listen_socket,
                             acceptor = Ref,
+                            ring = HashRing,
                             module = Module,
                             port=Port,
                             name=Name}};
