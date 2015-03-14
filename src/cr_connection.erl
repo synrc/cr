@@ -1,4 +1,5 @@
--module(cr_server).
+-module(cr_connection).
+-copyright('Maxim Sokhatsky').
 -include("cr.hrl").
 -behaviour(gen_fsm).
 -compile(export_all).
@@ -7,12 +8,12 @@
 -export([listen/2, transfer/2]).
 -define(TIMEOUT, 60000).
 
-start_listener(Module,Socket) ->
+start_connection(Module,Socket) ->
     {ok, {IP,Port}} = try inet:peername(Socket) catch _:_ -> {ok,{{127,0,0,1},now()}} end,
     Restart = permanent,
     Shutdown = 2000,
     UniqueName = {Module,IP,Port},
-    ChildSpec = { UniqueName, { cr_server, start_link, [UniqueName,Module,Socket]},
+    ChildSpec = { UniqueName, { cr_connection, start_link, [UniqueName,Module,Socket]},
         Restart, Shutdown, worker, [Module] },
     Sup = supervisor:start_child(Module:sup(),ChildSpec),
     io:format("SERVER: starting ~p listener: ~p~n",[Sup,{Module,IP,Port,Socket}]),
