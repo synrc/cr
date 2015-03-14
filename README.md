@@ -10,7 +10,7 @@ should be able to scale even with the RAM/DISC limitations.
 
 All this circumstances leads us to Chain
 Replication protocol as a simple and natural
-feedback to this challange.
+feedback to this challenge.
 
 Chain Replication protocol already used before
 in such products like Google FS, HDFS, mongodb, Cassandra, etc.
