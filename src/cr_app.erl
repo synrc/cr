@@ -15,8 +15,8 @@ start(_,_) ->
                 [ { interconnect, 9000, cr_interconnect },
                   { ping,         9001, cr_ping },
                   { client,       9002, cr_client } ]),
-    {Partitions,Nodes} = cr_hash:fresh(40,node()),
-    [ cr_vnode:start_vnode(Node) || Node <- Nodes ],
+    {Partitions,VNodes} = cr_hash:fresh(40,node()),
+    [ cr_vnode:start_vnode({Index,Node}) || {Index,Node} <- VNodes ],
     Res.
 
 protocol({Name,Port,Mod}) ->

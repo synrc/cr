@@ -59,7 +59,7 @@ init([]) ->
 init([Name,Mod,Socket]) ->
     error_logger:info_msg("PROTOCOL: starting ~p listener: ~p~n",[self(),{Name,Mod}]),
     process_flag(trap_exit, true),
-    {ok,listen,#state{module=Mod,name=Name,state=Mod:init([Name,Mod]),socket=Socket}}.
+    {ok,listen,#state{module=Mod,name=Name,state=Mod:init([Name,Mod,Socket]),socket=Socket}}.
 
 handle_info({tcp, Socket, Bin}, StateName, #state{module=Module,state=SubState} = State) ->
     inet:setopts(Socket, [{active, once}]),

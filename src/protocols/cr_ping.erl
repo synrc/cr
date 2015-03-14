@@ -6,7 +6,7 @@
 
 sup() -> ping_sup.
 
-init([Name,Mod]) -> #state{}.
+init([Name,Mod,Socket]) -> #state{socket=Socket}.
 
 dispatch({'join',Object},State)  ->
     error_logger:info_msg("PING: Join request: ~p~n",[Object]),

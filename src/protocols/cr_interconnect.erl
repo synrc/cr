@@ -6,8 +6,8 @@
 
 sup() -> interconnect_sup.
 
-init([Name,Mod]) ->
-    #state{name=Name,module=Mod}.
+init([Name,Mod,Socket]) ->
+    #state{name=Name,module=Mod,socket=Socket}.
 
 dispatch({'add_iterator',Object},State)  ->
     State;

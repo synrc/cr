@@ -6,7 +6,7 @@
 
 sup() -> client_sup.
 
-init([Name,Mod]) -> #state{name=Name,module=Mod}.
+init([Name,Mod,Socket]) -> #state{name=Name,module=Mod,socket=Socket}.
 
 dispatch({'get',Args},State)  -> State;
 
