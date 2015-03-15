@@ -26,8 +26,8 @@ code_change(_OldVsn, State, _Extra) -> {ok, State}.
 handle_call(Request, _From, State) -> {stop, {unknown_call, Request}, State}.
 handle_cast(_Msg, State) -> {noreply, State}.
 
-start_link(Name, Port, Module) ->
-    gen_server:start_link({local, Name}, ?MODULE, [Name, Port, Module], []).
+start_link(Name, Port, Module, HashRing) ->
+    gen_server:start_link({local, Name}, ?MODULE, [Name, Port, Module, HashRing], []).
 
 init([Name, Port, Module, HashRing]) ->
     process_flag(trap_exit, true),
