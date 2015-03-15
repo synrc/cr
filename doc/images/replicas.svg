@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="580px" height="365px" viewBox="0 0 580 365" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:sketch="http://www.bohemiancoding.com/sketch/ns">
+    <!-- Generator: Sketch 3.1.1 (8761) - http://www.bohemiancoding.com/sketch -->
+    <title>replicas</title>
+    <desc>Created with Sketch.</desc>
+    <defs></defs>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd" sketch:type="MSPage">
+        <g id="replicas" sketch:type="MSLayerGroup" transform="translate(-1.000000, 0.000000)">
+            <rect id="Rectangle-27" stroke="#979797" fill-opacity="0.519191576" fill="#4990E2" sketch:type="MSShapeGroup" x="177" y="0" width="132" height="59"></rect>
+            <rect id="Rectangle-31" stroke="#979797" fill-opacity="0.519191576" fill="#4990E2" sketch:type="MSShapeGroup" x="177" y="76" width="132" height="59"></rect>
+            <rect id="Rectangle-32" stroke="#979797" fill-opacity="0.519191576" fill="#4990E2" sketch:type="MSShapeGroup" x="177" y="155" width="132" height="59"></rect>
+            <rect id="Rectangle-33" stroke="#979797" fill-opacity="0.582002944" fill="#F8E81C" sketch:type="MSShapeGroup" x="179" y="231" width="132" height="59"></rect>
+            <rect id="Rectangle-34" stroke="#979797" fill-opacity="0.582002944" fill="#F8E81C" sketch:type="MSShapeGroup" x="181" y="306" width="132" height="59"></rect>
+            <text id="write--&gt;" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="0" y="34">write -&gt;</tspan>
+            </text>
+            <text id="&lt;--read" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="347" y="351">&lt;- read</tspan>
+            </text>
+            <text id="&lt;--TX-context" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="347" y="193">&lt;- TX context</tspan>
+            </text>
+            <text id="&lt;--head" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="350" y="38">&lt;- head</tspan>
+            </text>
+        </g>
+    </g>
+</svg>

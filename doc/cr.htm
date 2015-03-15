@@ -1,0 +1,202 @@
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="" />
+    <meta name="author" content="Maxim Sokhatsky" />
+    <title>CR</title>
+    <link rel="stylesheet" href="http://5ht.github.io/5HT.css" />
+</head>
+<body>
+<div class=app>
+
+<div align=right>FROM: 5HT<br>
+                   TO: PUBLIC<br>
+                 DATE: 15 MAR 2015</div>
+
+<h2>CR: chain replication protocol</h2>
+
+<div class=message>
+
+<p>In banking system demands are very tight. Database
+should be at least tripled, stand-by nodes should pick up
+master reads from failover node, writes should be
+accepted on a reasonble quorum, and later after
+recovery and rejoin should be merged, database
+should be able to scale even with the RAM/DISC limitations.</p>
+
+<p>No data should be treated as written otherwise that commited to all replicas.
+All this circumstances leads us to chain replication protocol as a simple and natural
+feedback to this challenge.</p>
+
+<p>Chain replication protocol was already used before
+in such products like Google FS, HDFS, mongodb, Cassandra, etc.
+They mostly provide a consistent distributed repository
+for event tables or for file storage. In banking industry
+we synchronize account balance with single end-point provider
+and track the transactions history log up to merging and cut-offs.
+</p>
+
+<h3>Features</h3>
+
+<p>
+<ul><li>Byzantine Chain Replication protocol</li>
+<li>Distributed transaction on replicas sequence</li>
+<li>Separate endpoints for HEART, CLIENT and SERVER protocols</li>
+<li>Quorum N+1 in 2N+1 for accepting writes</li>
+<li>Linear consistent ring hashing</li>
+<li>Automatic stand-by switchover</li>
+<li>Data sync on recovery</li>
+<li>High-performance non-blocking TCP acceptor</li>
+<li>HanoidDB backend database</li>
+<li>Pure and clean codebase</li></ul></p>
+
+
+<h3>Basic Protocol</h3>
+
+<div class=note style="background-color:#FAFAFA;"><p><b>Transaction definition</b>
+<code>
+</code><p></div>
+<div class=note>
+<p>All replicas are sequenced as chains. Transaction in CR means
+traversal command performing forward over the chain. In case with
+<b>commit</b> backward propagation it means also XA protocol. All writes
+are come to the chain's head, all reads come to chain's tail.
+</p></div>
+
+
+<p><center>Picture 1. Chain<br><br><img src="images/replicas.svg" height=200></center></p>
+
+<h3>Sync Protocol</h3>
+
+<div class=note style="background-color:#FAFAFA;"><p><b>Sync on recovery</b>
+<code>
+</code><p>
+</div>
+<div class=note>
+<p>During split-brains some operation could be accepted for writing,
+as deposition, account or client creation, etc. Some operation such as
+withdraw or balance check should be performed only on single quorum island.
+You may want to determine which operation should be accepted having at
+least a single node in island.</p></div>
+
+<p><center>Picture 2. Sync<br><br><img src="images/merging.svg" height=300></center></p>
+
+<h3>Log Protocol</h3>
+
+<div class=note style="background-color:#FAFAFA;"><p><b>Local Transactions</b>
+<code>
+</code><p>
+</div>
+<div class=note>
+<p>Each operation over some list stored in the system,
+like list of account's transactions is performed along
+with it's log in <b>#log</b> table. You should be able
+to cut-off in checkpoints transaction logs for archiving,
+compactification etc. Mainly transaction logs are needed
+to quickly pickup operational data that should be synced
+till the failover moment.
+</p></div>
+
+<p><center>Picture 3. Log<br><br><img src="images/log.svg" height=400></center></p>
+
+<h3>OTP protocol</h3>
+
+<p>Some types are embedded in L core to resolve main tasks during
+type inference, type unification and patterm maching compilation.
+L has following basic types which are used by infer/unify/match core.
+These types are also shared with Type Inspector.</p>
+
+<div class=note style="background-color:#fafafa;"><p>INTERCONNECT<ul>
+    <li>transaction</li>
+    <li>get</li>
+    <li>sync</li>
+    </ul></p></div>
+<div class=note><p>PING<ul>
+    <li>ping</li>
+    <li>join</li>
+    <li>leave</li>
+</ul></p></div>
+
+<h3>Implementation</h3>
+
+<p>The chain replication protolcol is implementes as <b>Erlang/OTP</b> application <b>cr</b>
+that could be embeded in any toplevel application. We use one supervision
+tree and <b>gen_server</b> per one TCP endpoint along with separate
+<b>vnode_sup</b> supervision for VNODE transactional contexts per hashring vnode.</p>
+
+<!--div class=note style="background-color:#FAFAFA;">
+<p>Booting<code>
+</code><p></div>
+<div class=note>
+<pre>
+tcp(Name,Port,Mod,HashRing) ->
+  { Name,{cr_tcp,start_link,[Name,Port,Mod,HashRing]},
+    permanent,2000,worker,[cr_tcp]}.
+
+sup(S) ->
+  { S,{supervisor,start_link,[{local,S},cr_connection,[]]},
+    permanent,infinity,supervisor,[]}.
+
+init([HashRing,Opts]) ->
+    {ok, {{one_for_one, 5, 60},
+        lists:flatten([ protocol(O,HashRing) || O<-Opts ])
+     ++ [ sup(vnode_sup) ] }}.
+
+stop(_) -> ok.
+start(_,_) ->
+    HashRing = {Partitions,VNodes} = cr_hash:fresh(40,node()),
+    Sup = supervisor:start_link({local, cr_sup}, ?MODULE,
+     [ HashRing, [ { interconnect, 9000, cr_interconnect },
+                   { ping,         9001, cr_ping },
+                   { client,       9002, cr_client } ]]),
+     [ cr_vnode:start_vnode({Index,Node},HashRing)
+                         || {Index,Node} <- VNodes ],
+    Sup.
+
+protocol({Name,Port,Mod},HashRing) ->
+  SupName = list_to_atom(lists:concat([Name,'_sup'])),
+  [ tcp(Name,Port,Mod,HashRing),   % TCP listener gen_server
+    sup(SupName)        ]. % Accepted Clients Supervisor
+</pre>
+</p></div-->
+
+<p><center>Picture 4. Supervision<br><br><img src="images/sup.png" height=400></center></p>
+
+<br>
+
+<div class=note>
+<pre>
+> [{T,Pid}||{T,Pid,_,_}<-supervisor:which_children(cr_sup)].
+[{vnode_sup,<0.52.0>},
+ {client_sup,<0.51.0>},
+ {client,<0.50.0>},
+ {ping_sup,<0.289.0>},
+ {ping,<0.48.0>},
+ {interconnect_sup,<0.47.0>},
+ {interconnect,<0.46.0>}]
+</pre></div>
+
+<h3>Hash Ring</h3>
+
+<div class=note>
+<pre>
+> [{I,P}||{{I,_},P,_,_} <- supervisor:which_children(vnode_sup)].
+
+[{1461501637330902918203684832716283019655932542960,<0.53.0>},
+ {1424964096397630345248592711898375944164534229386,<0.54.0>},
+ {1388426555464357772293500591080468868673135915812,<0.55.0>},
+ {1351889014531085199338408470262561793181737602238,<0.56.0>},
+ {1315351473597812626383316349444654717690339288664,<0.57.0>},
+ {1278813932664540053428224228626747642198940975090,<0.58.0>},
+ {1242276391731267480473132107808840566707542661516,<0.59.0>},
+ {1205738850797994907518039986990933491216144347942,<0.60.0>}]
+</pre></div>
+
+
+
+</div>
+</div>
+</body>
+</html>

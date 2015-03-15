@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="1106px" height="642px" viewBox="0 0 1106 642" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:sketch="http://www.bohemiancoding.com/sketch/ns">
+    <!-- Generator: Sketch 3.1.1 (8761) - http://www.bohemiancoding.com/sketch -->
+    <title>log</title>
+    <desc>Created with Sketch.</desc>
+    <defs></defs>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd" sketch:type="MSPage">
+        <g id="log" sketch:type="MSLayerGroup" transform="translate(0.000000, -8.000000)">
+            <rect id="Rectangle-19" stroke="#979797" fill-opacity="0.519191576" fill="#4990E2" sketch:type="MSShapeGroup" x="167" y="74" width="228" height="59"></rect>
+            <rect id="Rectangle-20" stroke="#979797" fill-opacity="0.519191576" fill="#4990E2" sketch:type="MSShapeGroup" x="167" y="218.771634" width="228" height="59"></rect>
+            <rect id="Rectangle-26" stroke="#979797" fill-opacity="0.519191576" fill="#4990E2" sketch:type="MSShapeGroup" x="167" y="368.771634" width="227" height="59"></rect>
+            <rect id="Rectangle-23" stroke="#979797" fill-opacity="0.519191576" fill="#4990E2" sketch:type="MSShapeGroup" x="167" y="442.771634" width="227" height="59"></rect>
+            <rect id="Rectangle-25" stroke="#979797" fill="#B8E986" sketch:type="MSShapeGroup" x="11" y="517" width="132" height="59"></rect>
+            <rect id="Rectangle-32" stroke="#979797" fill-opacity="0.519191576" fill="#4990E2" sketch:type="MSShapeGroup" x="620" y="70.5543298" width="252" height="59"></rect>
+            <rect id="Rectangle-25" stroke="#979797" fill-opacity="0.582002944" fill="#F8E81C" sketch:type="MSShapeGroup" x="618" y="145.771634" width="257" height="59"></rect>
+            <rect id="Rectangle-28" stroke="#979797" fill-opacity="0.582002944" fill="#F8E81C" sketch:type="MSShapeGroup" x="618" y="290.771634" width="257" height="59"></rect>
+            <rect id="Rectangle-29" stroke="#979797" fill-opacity="0.519191576" fill="#4990E2" sketch:type="MSShapeGroup" x="620" y="219.771634" width="252" height="59"></rect>
+            <rect id="Rectangle-30" stroke="#979797" fill-opacity="0.519191576" fill="#4990E2" sketch:type="MSShapeGroup" x="619" y="369.771634" width="253" height="59"></rect>
+            <rect id="Rectangle-31" stroke="#979797" fill-opacity="0.519191576" fill="#4990E2" sketch:type="MSShapeGroup" x="619" y="443.771634" width="253" height="59"></rect>
+            <rect id="Rectangle-31" stroke="#979797" fill="#B8E986" sketch:type="MSShapeGroup" x="619" y="517.771634" width="253" height="59"></rect>
+            <rect id="Rectangle-32" stroke="#979797" fill="#B8E986" sketch:type="MSShapeGroup" x="619" y="590.771634" width="253" height="59"></rect>
+            <rect id="Rectangle-24" stroke="#979797" fill-opacity="0.582002944" fill="#F8E81C" sketch:type="MSShapeGroup" x="416" y="144.771634" width="182" height="59"></rect>
+            <rect id="Rectangle-27" stroke="#979797" fill-opacity="0.582002944" fill="#F8E81C" sketch:type="MSShapeGroup" x="411" y="285.771634" width="187" height="59"></rect>
+            <rect id="Rectangle-28" stroke="#979797" fill="#B8E986" sketch:type="MSShapeGroup" x="411" y="590.771634" width="187" height="59"></rect>
+            <text id="#transaction" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="167" y="33.7716344">#transaction</tspan>
+            </text>
+            <text id="#client" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="0" y="33.7716344">#client</tspan>
+            </text>
+            <text id="#account" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="421.5" y="33.7826985">#account</tspan>
+            </text>
+            <text id="#log" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="618" y="34.7826985">#log</tspan>
+            </text>
+            <text id="&lt;--live-data" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="907" y="563">&lt;- live data</tspan>
+            </text>
+            <text id="&lt;--last-sync" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="907" y="491">&lt;- last sync</tspan>
+            </text>
+            <text id="&lt;--epoch" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="907" y="112">&lt;- epoch</tspan>
+            </text>
+            <text id="&lt;--log-head" sketch:type="MSTextLayer" font-family="Geometria" font-size="36" font-weight="260" fill="#043D3D">
+                <tspan x="907" y="639">&lt;- log head</tspan>
+            </text>
+        </g>
+    </g>
+</svg>

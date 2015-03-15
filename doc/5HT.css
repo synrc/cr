@@ -1,0 +1,28 @@
+pre { padding:4px;white-space:pre;background-color:#F1F1F1;font-family:monospace;font-size:14pt;}
+code { padding:4px;white-space:pre;font-family:monospace;font-size:14pt;}
+body { font-family: local; font-size: 16pt; color: #888; }
+h1 { font-size: 34pt; }
+h2 { font-size: 24pt; margin-top: 50px; }
+h3 { margin-top: 40px; }
+h4 { margin-top: 40px; }
+h5 { margin-top: -20px; }
+p { margin-top: 10px; }
+.note { margin-top: 0px; }
+.note p { margin-top: 20px; }
+.menu { text-align: right;}
+a { margin-top: 10px; padding: 10px; }
+.app { margin:100px auto;min-width:300px;max-width:800px; }
+.message { align: center; }
+.note { margin-left:0px;margin-top:0px;background-color:#F1F1F1;padding:4px 10px 4px 24px;color:gray;}
+ul {margin-left:70px;} 
+
+a { color: blue; text-decoration: none }
+a:hover { color:blue; }
+a:hover, a:active { outline: 0 }
+
+@font-face {
+    font-family: 'local';
+    src: url('Geometria-Light.otf');
+    font-weight: normal;
+    font-style: normal
+}
