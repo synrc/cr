@@ -20,7 +20,7 @@ start_connection(Module,Socket,HashRing) ->
     Sup.
 
 listen({socket_ready, Socket}, State) ->
-    inet:setopts(Socket, [{active, once}, {packet, 0}, binary]),
+    inet:setopts(Socket, [binary]),
     {next_state, transfer, State#state{socket=Socket}, ?TIMEOUT};
 
 listen(Other, State) ->

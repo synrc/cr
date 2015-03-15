@@ -22,13 +22,13 @@ relx     := "{release,{$(RELEASE),\"$(VER)\"},[$(RELEASE)]}.\\n{include_erts,tru
 \\n{vm_args,\"$(VM)\"}.\\n{overlay,[{mkdir,\"log/sasl\"}]}."
 
 test: eunit ct
-delete-deps get-deps update-deps:
-	rebar $@
+deps up:
+	mad $@
 compile:
-	rebar compile skip_deps=true
+	mad compile skip_deps=true
 clean:
 	rm -f .applist
-	rebar $@
+	mad $@
 .applist:
 	mad plan
 $(RUN_DIR) $(LOG_DIR):

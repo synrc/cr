@@ -31,7 +31,7 @@ start_link(Name, Port, Module) ->
 
 init([Name, Port, Module, HashRing]) ->
     process_flag(trap_exit, true),
-    Opts = [binary,{packet,0},{reuseaddr,true},{keepalive,true},{backlog,30},{active,false}],
+    Opts = [binary,{packet,1},{reuseaddr,true},{keepalive,true},{backlog,30},{active,false}],
     case gen_tcp:listen(Port, Opts) of
          {ok, Listen_socket} ->
 	          {ok, Ref} = prim_inet:async_accept(Listen_socket, -1),
