@@ -1,4 +1,4 @@
-Bizantine Chain Replication Protocol
+Byzantine Chain Replication Protocol
 ====================================
 
 In banking system demands are very tight. Database
@@ -22,7 +22,7 @@ and track the transactions history log up to merging and cut-offs.
 Features
 --------
 
-* Bizantine Chain Replication protocol
+* Byzantine Chain Replication protocol
 * Distributed transaction on replicas sequence
 * Separate endpoints for HEART, CLIENT and SERVER protocols
 * Quorum N+1 in 2N+1 for accepting writes
