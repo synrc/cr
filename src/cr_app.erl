@@ -6,7 +6,7 @@ tcp(Name,Port,Mod,HashRing) -> { Name,{cr_tcp,start_link,[Name,Port,Mod,HashRing
 sup(SupName) -> { SupName,{supervisor,start_link,[{local,SupName},cr_connection,[]]},
                                  permanent,infinity,supervisor,[]}.
 
-init(HashRingt,Opts) ->
+init(HashRing,Opts) ->
     {ok, {{one_for_one, 5, 60}, lists:flatten([ protocol(O,HashRing) || O<-Opts ])
                                        ++ [ sup(vnode_sup) ] }}.
 stop(_)    -> ok.
