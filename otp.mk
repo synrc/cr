@@ -24,12 +24,12 @@ relx     := "{release,{$(RELEASE),\"$(VER)\"},[$(RELEASE)]}.\\n{include_erts,tru
 test: eunit ct
 deps up:
 	mad $@
-compile:
+compile: deps
 	mad compile skip_deps=true
 clean:
 	rm -f .applist
 	mad $@
-.applist:
+.applist: compile
 	mad plan
 $(RUN_DIR) $(LOG_DIR):
 	mkdir -p $(RUN_DIR) & mkdir -p $(LOG_DIR)
@@ -57,4 +57,4 @@ eunit:
 ct:
 	rebar ct skip_deps=true verbose=1
 
-.PHONY: delete-deps get-deps compile clean console start attach release update-deps dialyze ct eunit tar
+.PHONY: deps up compile clean console start attach release update-deps dialyze ct eunit tar

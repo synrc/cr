@@ -19,6 +19,13 @@ for event tables or for file storage. In banking industry
 we synchronize account balance with single end-point provider
 and track the transactions history log up to merging and cut-offs.
 
+Launch
+------
+
+```
+    $ make console
+```
+
 Features
 --------
 
