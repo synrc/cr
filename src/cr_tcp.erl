@@ -18,7 +18,6 @@ handle_info({inet_async,ListSock,Ref,Message},
          {error, Reason} ->
               io:format("TCP: Accept Error: ~p~n",[Reason]),
               Reason end,
-    io:format("TCP: ASYNC: ~p~n",[Acceptor]),
     {noreply, State#state{acceptor=Acceptor}};
 
 handle_info(_Info, State) -> {noreply, State}.
@@ -33,7 +32,6 @@ start_link(Name, Port, Module, HashRing) ->
 init([Name, Port, Module, HashRing]) ->
     process_flag(trap_exit, true),
     Opts = [binary,{packet,1},{reuseaddr,true},{keepalive,true},{backlog,30},{active,false}],
-    io:format("TCP: INIT: ~p~n",[Name]),
     case gen_tcp:listen(Port, Opts) of
          {ok, Listen_socket} ->
 	          {ok, Ref} = prim_inet:async_accept(Listen_socket, -1),

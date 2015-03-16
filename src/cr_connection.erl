@@ -29,12 +29,12 @@ listen(Other, State) ->
     {next_state, listen, State, ?TIMEOUT}.
 
 transfer({in,Binary}, #state{state=SubState,module=Module}=State) ->
-    error_logger:error_msg("SERVER: RECV ~p~n", [Binary]),
+%    error_logger:error_msg("SERVER: RECV ~p~n", [Binary]),
     NewSubState = Module:dispatch(cr:decode(Binary),SubState),
     {next_state, transfer, State#state{state=NewSubState}, ?TIMEOUT};
 
 transfer({out,Message}, #state{socket=Socket,state=SubState}=State) ->
-    error_logger:error_msg("SERVER: SEND ~p~n", [Message]),
+%    error_logger:error_msg("SERVER: SEND ~p~n", [Message]),
     Bytes = cr:encode(Message),
     gen_tcp:send(Socket, Bytes),
     {next_state, transfer, State, ?TIMEOUT};
@@ -65,7 +65,6 @@ init([Name,Mod,Socket,Nodes]) ->
                       state=Mod:init([Name,Mod,Socket,Nodes])}}.
 
 handle_info({tcp, Socket, Bin}, StateName, #state{module=Module,state=SubState} = State) ->
-    error_logger:info_msg("TCP data: ~p~n",[Bin]),
     inet:setopts(Socket, [{active, once}]),
     ?MODULE:StateName({in,Bin}, State);
 

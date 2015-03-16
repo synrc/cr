@@ -41,8 +41,7 @@ handle_info({carrier,lost,N}, State=#state{timers=Timer}) ->
 
 handle_info({timer,ping,{A,P},N,S}, State=#state{timers=Timers}) ->
 
-    error_logger:info_msg("PING STATE: ~p~n"
-                              "Timers: ~p~n",[{A,P,N,S},Timers]),
+    error_logger:info_msg("PING STATE: ~p~n",[{A,P,N,S}]),
 
     {N,Timer} = lists:keyfind(N,1,Timers),
     case Timer of undefined -> skip; _ -> erlang:cancel_timer(Timer) end,
@@ -54,7 +53,7 @@ handle_info({timer,ping,{A,P},N,S}, State=#state{timers=Timers}) ->
 
       Data = try case gen_tcp:recv(Socket,0) of
                       {error,_} -> {error,undefined};
-                      {ok,_}    -> {ok,Socket} end
+                      {ok,PONG} when length(PONG) == 10 -> {ok,Socket} end
            catch E1:R1 ->    {error,recv} end,
 
     T = case Data of
