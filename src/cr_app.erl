@@ -13,10 +13,7 @@ stop(_)    -> ok.
 start(_,_) ->
     {ok,Peers}=application:get_env(cr,peers),
     {_,P1,P2,P3}=lists:keyfind(node(),1,Peers),
-    spawn(fun() ->
-     [ try riak_ensemble_manager:join(Node,node())
-       catch _:_ -> ok end||{Node,_,_,_}<-Peers, Node /= node() ],
-    riak_ensemble_manager:enable() end),
+    spawn(fun() -> cr_ensemble:boot(Peers) end),
     HashRing = {Partitions,VNodes} = cr_hash:fresh(40,node()),
     Sup = supervisor:start_link({local, cr_sup}, ?MODULE,
                 [HashRing,[ { interconnect, P1, cr_interconnect },
