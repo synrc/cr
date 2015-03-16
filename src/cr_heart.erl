@@ -52,7 +52,9 @@ handle_info({timer,ping,{A,P},N,S}, State=#state{timers=Timers}) ->
                              {ok,S1} -> gen_tcp:send(S1,term_to_binary({ping})), S1;
                              {error,_} -> undefined end end,
 
-      Data = try gen_tcp:recv(Socket,0), {ok,Socket}
+      Data = try case gen_tcp:recv(Socket,0) of
+                      {error,_} -> {error,undefined};
+                      {ok,_}    -> {ok,Socket} end
            catch E1:R1 ->    {error,recv} end,
 
     T = case Data of
