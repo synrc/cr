@@ -47,16 +47,17 @@ handle_info({timer,ping,{A,P},N,S}, State=#state{timers=Timers}) ->
     {N,Timer} = lists:keyfind(N,1,Timers),
     case Timer of undefined -> skip; _ -> erlang:cancel_timer(Timer) end,
 
-    Socket = case S of
-              S -> try gen_tcp:send(S,term_to_binary({ping})), S catch _:_ -> undefined end;
-      undefined ->
-             try {ok,S1} = gen_tcp:connect(A,P,[{packet,0}]),
-                           gen_tcp:send(S1,term_to_binary({ping})),
-                           S1 catch _:_ -> undefined end end,
+    Socket = try gen_tcp:send(S,term_to_binary({ping})), S
+           catch E:R -> case gen_tcp:connect(A,P,[{packet,0},{active,false}]) of
+                             {ok,S1} -> gen_tcp:send(S1,term_to_binary({ping})), S1;
+                             {error,_} -> undefined end end,
 
-    T = case try gen_tcp:recv(Socket,0) catch _:_ -> {error,recv} end of
+      Data = try gen_tcp:recv(Socket,0), {ok,Socket}
+           catch E1:R1 ->    {error,recv} end,
+
+    T = case Data of
          {error,_} -> timer_restart({0,0,5},{A,P},N,undefined);
-         {ok,_}    -> timer_restart({0,0,5},{A,P},N,Socket) end,
+         {ok,Sx}   -> timer_restart({0,0,5},{A,P},N,Sx) end,
 
     {noreply,State#state{timers=setkey(N,1,Timers,{N,T})}};
 
