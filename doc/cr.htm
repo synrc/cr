@@ -76,10 +76,9 @@ are come to the chain's head, all reads come to chain's tail.
 </div>
 <div class=note>
 <p>During split-brains some operation could be accepted for writing,
-as deposition, account or client creation, etc. Some operation such as
-withdraw or balance check should be performed only on single quorum island.
-You may want to determine which operation should be accepted having at
-least a single node in island.</p></div>
+as deposition, account or client creation, etc having N+1 live replicas among 2*N+1 nodes.
+Such operations as withdraw or balance check should be performed only on quorum island.
+</p></div>
 
 <p><center>Picture 2. Sync<br><br><img src="images/merging.svg" height=300></center></p>
 
