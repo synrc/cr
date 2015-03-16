@@ -11,11 +11,17 @@ init([HashRing,Opts]) ->
                                        ++ [ sup(vnode_sup) ] }}.
 stop(_)    -> ok.
 start(_,_) ->
+    {ok,Peers}=application:get_env(cr,peers),
+    {_,P1,P2,P3}=lists:keyfind(node(),1,Peers),
+    spawn(fun() ->
+     [ try riak_ensemble_manager:join(Node,node())
+       catch _:_ -> ok end||{Node,_,_,_}<-Peers, Node /= node() ],
+    riak_ensemble_manager:enable() end),
     HashRing = {Partitions,VNodes} = cr_hash:fresh(40,node()),
     Sup = supervisor:start_link({local, cr_sup}, ?MODULE,
-                [HashRing,[ { interconnect, 9000, cr_interconnect },
-                  { ping,         9001, cr_ping },
-                  { client,       9002, cr_client } ]]),
+                [HashRing,[ { interconnect, P1, cr_interconnect },
+                            { ping,         P2, cr_ping },
+                            { client,       P3, cr_client } ]]),
     [ cr_vnode:start_vnode({Index,Node},HashRing) || {Index,Node} <- VNodes ],
     Sup.
 
