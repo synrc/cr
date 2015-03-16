@@ -2,51 +2,50 @@
 -behaviour(riak_ensemble_backend).
 -compile(export_all).
 -include("cr.hrl").
--export([init/3, new_obj/4]).
--export([obj_epoch/1, obj_seq/1, obj_key/1, obj_value/1]).
--export([set_obj_epoch/2, set_obj_seq/2, set_obj_value/2]).
--export([get/3, put/4, tick/5, ping/2, ready_to_start/0]).
--export([synctree_path/2]).
--export([handle_down/4]).
-
 -include_lib("riak_ensemble/include/riak_ensemble_types.hrl").
 
-create(Ensemble,Peers) ->
-    riak_ensemble_manager:create_ensemble(Ensemble, undefined, Peers, cr_ensemble, []).
+ensembles() ->
+    riak_ensemble_state:ensembles(riak_ensemble_manager:get_cluster_state()).
+
+create([H|T]=Peers) ->
+    riak_ensemble_root:set_ensemble(tps_cluster,
+        #ensemble_info{leader={1,node()}, views=[peers()], seq={0,0}, vsn={0,0},
+                       mod=cr_ensemble, args=[]}).
 
 -record(state, {
     ensemble   :: ensemble_id(),
     id         :: peer_id(),
     pos        :: integer(),
     name,
-    proxy      :: atom(),
-    proxy_mon  :: reference(),
-    vnode_mon  :: reference(),
+    proxy,      % gen_server
     async      :: pid()
 }).
 
-boot(Peers) ->
-  [ try riak_ensemble_manager:join(Node,node())
-       catch _:_ -> ok end||{Node,_,_,_}<-Peers, Node /= node() ],
-
-    riak_ensemble_manager:enable(),
-    Known = case riak_ensemble_manager:known_ensembles() of
-        {ok, EnsList} -> [Name || {Name, _Info} <- EnsList];
-        _ -> []
-    end,
-    Ensemble = hd(Known),
-    create(Ensemble, peers()),
+add_peers() ->
     riak_ensemble_peer:update_members(riak_ensemble_manager:get_leader_pid(root),
-      [{add,Peer}||Peer<-cr_ensemble:peers()], 5000),
-    error_logger:info_msg("Ensemble: ~p~n",[Ensemble]),
+              [{add,Peer}||Peer<-cr_ensemble:peers()], 5000).
+
+enable() -> riak_ensemble_manager:enable().
+
+create() ->
+%    {ok,[Known|_]} = riak_ensemble_manager:known_ensembles(),
+%    {_,Ensemble} = Known,
+    R = create(peers()),
+    error_logger:info_msg("Ensemble: ~p~n",[R]),
+    R.
+
+join(Node) -> riak_ensemble_manager:join(Node,node()).
+
+boot(N,Peers) ->
+%  [ try riak_ensemble_manager:join(Node,node())
+%       catch _:_ -> ok end||{Node,_,_,_}<-Peers, Node /= node() ],
     ok.
 
-
-peers() -> [{1,'cr@127.0.0.1'},
-            {2,'cr2@127.0.0.1'},
+peers() -> [{2,'cr2@127.0.0.1'},
             {3,'cr3@127.0.0.1'}].
 
 init(Ensemble, Id, []) ->
+    error_logger:info_msg("ENSEMBLE INIT: ~p~n",[{Ensemble,Id}]),
     <<Hash:160/integer>> = riak_ensemble_util:sha(term_to_binary({Ensemble, Id})),
     Name = integer_to_list(Hash),
     #state{
@@ -67,74 +66,31 @@ set_obj_value(Value, EnsObj) -> EnsObj#ens{val=Value}.
 get(ExtKey, From, #state{proxy=Proxy}=State) -> catch Proxy ! {ensemble_get, ExtKey, From}, State.
 put(ExtKey, EnsObj, From, #state{proxy=Proxy}=State) -> catch Proxy ! {ensemble_put, ExtKey, EnsObj, From}, State.
 tick(_Epoch, _Seq, _Leader, Views, State) ->
-    error_logger:info_msg("ENSEMBLE TICK: ~p~n",[{_Epoch, _Seq, _Leader, Views, State}]),
-    #state{
-        id = {{nkv, EnsIdx, N, _}, _},
-        async = Async
-    } = State,
-    Latest = hd(Views),
-    Peers = peers(),
-    Add = Peers -- Latest,
-    Del = Latest -- Peers,
-    Changes = [{add, Peer} || Peer <- Add] ++ [{del, Peer} || Peer <- Del],
-    case Changes of
-        [] ->
-            State;
-        _ ->
-            case is_pid(Async) andalso is_process_alive(Async) of
-                true ->
-                    State;
-                false ->
-                    Self = self(),
-                    Async2 = spawn(
-                        fun() ->
-                            case riak_ensemble_peer:update_members(Self, Changes, 5000) of
-                                ok ->
-                                    lager:warning("Executed Ensemble Changes at ~p~n",[Changes]);
-                                _ ->
-                                    error
-                            end
-                        end),
-                        State#state{}
-            end
-    end.
+    error_logger:info_msg("ENSEMBLE TICK:  Epoch: ~p~n"
+                                        "    Seq: ~p~n"
+                                        " Leader: ~p~n"
+                                        "  Views: ~p~n"
+                                        "  State: ~p~n",[_Epoch, _Seq, _Leader, Views, State]),
+    State#state{}.
 
-ping(From, #state{proxy=Proxy}=State) -> catch Proxy ! {ensemble_ping, From}, {async, State}.
+ping(From, #state{}=State) ->
+    error_logger:info_msg("ENSEMBLE PING: ~p~n",[{}]),
+    {async, State}.
 
 handle_down(Ref, _Pid, Reason, #state{}=State) ->
-    #state{
-        id = {{nkv, EnsIdx, _N, Idx}, _},
-        pos = Pos
-    } = State,
+    error_logger:info_msg("ENSEMBLE DOWN: ~p~n",[{}]),
     case Reason of
         normal -> ok;
-        _ -> lager:warning("Ensemble Backend vnode crashed with reason: ~p",[Reason])
-    end,
-    {reset, State#state{}};
-
-handle_down(Ref, _Pid, Reason, #state{}=State) ->
-    #state{
-        id = {{nkv, EnsIdx, _N, _Idx}, _},
-        proxy = Proxy, 
-        pos=Pos
-    } = State,
-    case Reason of
-        normal ->
-            ok;
-        _ ->
-            lager:warning("Ensemble Backend vnode proxy crashed with reason: ~p",[Reason])
+        _ -> error_logger:info_msg("Crashed with reason: ~p",[Reason])
     end,
     {reset, State#state{}};
 
 handle_down(_Ref, _Pid, _Reason, _State) -> false.
 
-ready_to_start() -> true.
+ready_to_start() ->
+   error_logger:info_msg("Ready to start: ~p",[node()]),
+    true.
 
-synctree_path(_Ensemble, Id) ->
-    {{nkv, EnsIdx, N, Idx}, _} = Id,
-    Bin = term_to_binary({EnsIdx, N}),
-    TreeId = <<0, Bin/binary>>,
-    {TreeId, "nkv_" ++ integer_to_list(Idx)}.
-
+synctree_path(E, Id) -> { <<0,(term_to_binary({E, Id}))/binary>>, lists:concat([cr,binary_to_list(term_to_binary({E,Id}))]) }.
 make_eseq(Epoch, Seq) -> (Epoch bsl 32) + Seq.
 get_epoch_seq(ESeq) -> <<Epoch:32/integer, Seq:32/integer>> = <<ESeq:64/integer>>, {Epoch, Seq}.

@@ -12,8 +12,8 @@ init([HashRing,Opts]) ->
 stop(_)    -> ok.
 start(_,_) ->
     {ok,Peers}=application:get_env(cr,peers),
-    {_,P1,P2,P3}=lists:keyfind(node(),1,Peers),
-    spawn(fun() -> cr_ensemble:boot(Peers) end),
+    {N,P1,P2,P3}=lists:keyfind(node(),1,Peers),
+    spawn(fun() -> cr_ensemble:boot(N,Peers) end),
     HashRing = {Partitions,VNodes} = cr_hash:fresh(40,node()),
     Sup = supervisor:start_link({local, cr_sup}, ?MODULE,
                 [HashRing,[ { interconnect, P1, cr_interconnect },
