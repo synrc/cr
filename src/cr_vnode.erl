@@ -2,13 +2,17 @@
 -copyright('Maxim Sokhatsky').
 -include("cr.hrl").
 -compile(export_all).
--record(state, {name,ring}).
+-record(state, {name,nodes}).
 -export(?GEN_SERVER).
 
 start_vnode(UniqueName,HashRing) ->
     Restart = permanent,
     Shutdown = 2000,
-    ChildSpec = {UniqueName,{cr_vnode,start_link,[UniqueName,HashRing]},Restart,Shutdown,worker,[cr_vnode]},
+    {Index,NodeName} = UniqueName,
+    VNode = case Index of
+                 0 -> cr_heart;
+                 _ -> cr_vnode end,
+    ChildSpec = {UniqueName,{VNode,start_link,[UniqueName,HashRing]},Restart,Shutdown,worker,[VNode]},
     supervisor:start_child(vnode_sup,ChildSpec).
 
 start_link(UniqueName,HashRing) ->
@@ -16,7 +20,7 @@ start_link(UniqueName,HashRing) ->
 
 init([UniqueName,HashRing]) ->
     error_logger:info_msg("VNODE PROTOCOL: started: ~p.~n",[UniqueName]),
-    {ok,#state{name=UniqueName,ring=HashRing}}.
+    {ok,#state{name=UniqueName,nodes=HashRing}}.
 
 handle_info({'EXIT', Pid,_}, #state{} = State) ->
     error_logger:info_msg("VNODE: EXIT~n",[]),

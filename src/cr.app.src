@@ -3,6 +3,6 @@
   {description, "Chain Replication"},
   {vsn, "0.1"},
   {registered, []},
-  {applications, [kernel,stdlib,riak_ensemble]},
+  {applications, [kernel,stdlib]},
   {mod, { cr_app, []}}
 ]}.
