@@ -18,6 +18,8 @@ start_link({Index,Node}, Opts) ->
     io:format("RAFTER start_link ~p~n",[{Index,Node}]),
     gen_fsm:start_link({local,Node},?MODULE, [Node, Opts], []).
 
+raftname(Name) -> list_to_atom(lists:concat(["rafter:",Name])).
+
 init([Me, #rafter_opts{state_machine=StateMachine,cluster=Nodes}]) ->
     Timer = gen_fsm:send_event_after(election_timeout(), timeout),
     #meta{voted_for=VotedFor, term=Term} = cr_log:get_metadata(Me),
@@ -31,7 +33,10 @@ init([Me, #rafter_opts{state_machine=StateMachine,cluster=Nodes}]) ->
                    timer=Timer,
                    state_machine=StateMachine,
                    backend_state=BackendState},
-    Config = cr_log:get_config(Me),
+    N = lists:map(fun({N,_,_,_})->N end,Nodes),
+    io:format("RAFTER INIT Nodes: ~p~n",[N]),
+    Config = #config{state=transitional,oldservers=N,newservers=N},
+             %cr_log:get_config(Me),
     NewState =
         case Config#config.state of
             blank ->
@@ -113,7 +118,6 @@ follower(#vote{}, State) ->
     io:format("RAFTER FOLLOWER #vote~n"),
     {next_state, follower, State};
 follower(#append_entries_rpy{}, State) ->
-    io:format("RAFTER FOLLOWER #append_rpy~n"),
     {next_state, follower, State}.
 
 %% Vote for this candidate
@@ -124,14 +128,14 @@ follower(#request_vote{}=RequestVote, _From, State) ->
 follower(#append_entries{term=Term}, _From,
          #state{term=CurrentTerm, me=Me}=State) when CurrentTerm > Term ->
     Rpy = #append_entries_rpy{from=Me, term=CurrentTerm, success=false},
-    io:format("RAFTER FOLLOWER #append~n"),
+    io:format("RAFTER FOLLOWER #append Me: ~p success: false~n",[Me]),
     {reply, Rpy, follower, State};
 
 follower(#append_entries{term=Term, from=From, prev_log_index=PrevLogIndex,
                          entries=Entries, commit_index=CommitIndex,
                          send_clock=Clock}=AppendEntries,
          _From, #state{me=Me}=State) ->
-    io:format("RAFTER FOLLOWER #append~n"),
+    %io:format("RAFTER FOLLOWER #append Me: ~p~n",[Me]),
     State2=set_term(Term, State),
     Rpy = #append_entries_rpy{send_clock=Clock,
                               term=Term,
@@ -158,7 +162,7 @@ follower(#append_entries{term=Term, from=From, prev_log_index=PrevLogIndex,
 %% entry in every log.
 follower({set_config, {Id, NewServers}}, From,
           #state{me=Me, followers=F, config=#config{state=blank}=C}=State) ->
-    io:format("RAFTER FOLLOWER set_config~n"),
+    io:format("RAFTER FOLLOWER set_config Me: ~p~n",[Me]),
     case lists:member(Me, NewServers) of
         true ->
             {Followers, Config} = reconfig(Me, F, C, NewServers, State),
@@ -176,18 +180,18 @@ follower({set_config, {Id, NewServers}}, From,
     end;
 
 follower({set_config, _}, _From, #state{leader=undefined, me=Me, config=C}=State) ->
-    io:format("RAFTER FOLLOWER set_config~n"),
+    io:format("RAFTER FOLLOWER set_config ~p~n",[Me]),
     Error = no_leader_error(Me, C),
     {reply, {error, Error}, follower, State};
 
 follower({set_config, _}, _From, #state{leader=Leader}=State) ->
-    io:format("RAFTER FOLLOWER set_config~n"),
+    io:format("RAFTER FOLLOWER set_config ~p~n",[Leader]),
     Reply = {error, {redirect, Leader}},
     {reply, Reply, follower, State};
 
 follower({read_op, _}, _From, #state{me=Me, config=Config,
                                            leader=undefined}=State) ->
-    io:format("RAFTER FOLLOWER read_op~n"),
+    io:format("RAFTER FOLLOWER read_op ~p~n",[Me]),
     Error = no_leader_error(Me, Config),
     {reply, {error, Error}, follower, State};
 
@@ -211,7 +215,7 @@ follower({op, _Command}, _From, #state{leader=Leader}=State) ->
 %% get a quorum for our votes, so just reply to the user here and keep trying
 %% until the other nodes come up.
 candidate(timeout, #state{term=1, init_config=[_Id, From]}=S) ->
-    io:format("RAFTER CANDIDATE timeout~n"),
+    io:format("RAFTER CANDIDATE timeout ~n"),
     State0 = reset_timer(election_timeout(), S),
     gen_fsm:reply(From, {error, peers_not_responding}),
     State = State0#state{init_config=no_client},
@@ -337,7 +341,7 @@ candidate({op, _Command}, _From, #state{leader=undefined}=State) ->
 leader(timeout, #state{term=Term,
                        init_config=no_client,
                        config=C}=S) ->
-    io:format("RAFTER LEADER timout~n"),
+    io:format("RAFTER LEADER timeout ~p~n",[no_client]),
     Entry = #rafter_entry{type=config, term=Term, cmd=C},
     State0 = append(Entry, S),
     State = reset_timer(heartbeat_timeout(), State0),
@@ -347,7 +351,7 @@ leader(timeout, #state{term=Term,
 %% We have just been elected leader because of an initial configuration.
 %% Append the initial config and set init_config=complete.
 leader(timeout, #state{term=Term, init_config=[Id, From], config=C}=S) ->
-    io:format("RAFTER LEADER timout~n"),
+    io:format("RAFTER LEADER timeout ~p~n",[{Id,From}]),
     State0 = reset_timer(heartbeat_timeout(), S),
     Entry = #rafter_entry{type=config, term=Term, cmd=C},
     State = append(Id, From, Entry, State0, leader),
@@ -355,7 +359,6 @@ leader(timeout, #state{term=Term, init_config=[Id, From], config=C}=S) ->
     {next_state, leader, NewState};
 
 leader(timeout, State0) ->
-    io:format("RAFTER LEADER timout~n"),
     State = reset_timer(heartbeat_timeout(), State0),
     NewState = send_append_entries(State),
     {next_state, leader, NewState};
@@ -363,20 +366,17 @@ leader(timeout, State0) ->
 %% We are out of date. Go back to follower state.
 leader(#append_entries_rpy{term=Term, success=false},
        #state{term=CurrentTerm}=State) when Term > CurrentTerm ->
-    io:format("RAFTER LEADER #append_rpy~n"),
     NewState = step_down(Term, State),
     {next_state, follower, NewState};
 
 %% This is a stale reply from an old request. Ignore it.
 leader(#append_entries_rpy{term=Term, success=true},
        #state{term=CurrentTerm}=State) when CurrentTerm > Term ->
-    io:format("RAFTER LEADER #append_rpy~n"),
     {next_state, leader, State};
 
 %% The follower is not synced yet. Try the previous entry
 leader(#append_entries_rpy{from=From, success=false},
        #state{followers=Followers, config=C, me=Me}=State) ->
-    io:format("RAFTER LEADER #append_rpy~n"),
        case lists:member(From, rafter_config:followers(Me, C)) of
            true ->
                NextIndex = decrement_follower_index(From, Followers),
@@ -391,7 +391,6 @@ leader(#append_entries_rpy{from=From, success=false},
 %% Success!
 leader(#append_entries_rpy{from=From, success=true}=Rpy,
        #state{followers=Followers, config=C, me=Me}=State) ->
-    io:format("RAFTER LEADER #append_rpy~n"),
     case lists:member(From, rafter_config:followers(Me, C)) of
         true ->
             NewState = save_rpy(Rpy, State),
@@ -802,7 +801,7 @@ send_entry(Peer, Index, #state{me=Me,
                                     entries=Entries,
                                     commit_index=CIdx,
                                     send_clock=Clock},
-    rafter_requester:send(Peer, AppendEntries).
+    rsend(Peer, AppendEntries).
 
 send_append_entries(#state{followers=Followers, send_clock=SendClock}=State) ->
     NewState = State#state{send_clock=SendClock+1},
@@ -829,7 +828,7 @@ request_votes(#state{config=Config, term=Term, me=Me}) ->
                         from=Me,
                         last_log_index=cr_log:get_last_index(Me),
                         last_log_term=cr_log:get_last_term(Me)},
-    [rafter_requester:send(Peer, Msg) || Peer <- Voters].
+    [rsend(Peer, Msg) || Peer <- Voters].
 
 become_candidate(#state{term=CurrentTerm, me=Me}=State0) ->
     State = reset_timer(election_timeout(), State0),
@@ -958,3 +957,16 @@ reset_timer(Duration, State=#state{timer=Timer}) ->
 -include_lib("eunit/include/eunit.hrl").
 
 -endif.
+
+rsend(To, #request_vote{from=From}=Msg) -> rsend(To, From, Msg);
+rsend(To, #append_entries{from=From}=Msg) -> rsend(To, From, Msg).
+rsend(To, From, Msg) ->
+    spawn(fun() ->
+              case rafter_consensus_fsm:send_sync(To, Msg) of
+                  Rpy when is_record(Rpy, vote) orelse
+                           is_record(Rpy, append_entries_rpy) ->
+                      rafter_consensus_fsm:send(From, Rpy);
+                  E ->
+                      lager:error("Error sending ~p to To ~p: ~p", [Msg, To, E])
+              end
+          end).
