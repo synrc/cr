@@ -34,7 +34,7 @@ stop(_)    -> ok.
 start(_,_) ->
     {ok,Peers}=application:get_env(cr,peers),
     {N,P1,P2,P3}=lists:keyfind(node(),1,Peers),
-    HashRing = {Partitions,VNodes} = cr_hash:fresh(4,node()),
+    HashRing = {Partitions,VNodes} = cr_hash:fresh(8,node()),
     Sup = supervisor:start_link({local, cr_sup}, ?MODULE,
                 [  Peers, [ { interconnect, P1, cr_interconnect },
                             { ping,         P2, cr_ping },

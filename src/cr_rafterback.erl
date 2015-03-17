@@ -17,6 +17,7 @@ stop(State) ->
     State.
 
 read({get, Table, Key}, State) ->
+    io:format("CONS GET: ~p~n",[{Table, Key}]),
     Val = try
               case ets:lookup(Table, Key) of
                   [{Key, Value}] ->
@@ -29,9 +30,11 @@ read({get, Table, Key}, State) ->
           end,
      {Val, State};
 read(list_tables, State) ->
+    io:format("CONS DIR~n",[]),
     {{ok, [Table || {Table} <- ets:tab2list(rafter_tables)]},
         State};
 read({list_keys, Table}, State) ->
+    io:format("CONS ALL: ~p~n",[{Table}]),
     Val = try
               list_keys(Table)
           catch _:E ->
@@ -42,6 +45,7 @@ read(_, State) ->
     {{error, ets_read_badarg}, State}.
 
 write({new, Name}, State) ->
+    io:format("CONS NEW: ~p~n",[{Name}]),
     Val = try
               _Tid = ets:new((Name), [ordered_set, named_table, public]),
               ets:insert(rafter_tables, {Name}),
@@ -51,6 +55,7 @@ write({new, Name}, State) ->
           end,
     {Val, State};
 write({put, Table, Key, Value}, State) ->
+    io:format("CONS PUT: ~p~n",[{Table, Key, Value}]),
     Val = try
               ets:insert(Table, {Key, Value}),
               {ok, Value}
@@ -59,6 +64,7 @@ write({put, Table, Key, Value}, State) ->
           end,
     {Val, State};
 write({delete, Table}, State) ->
+    io:format("CONS DELETE: ~p~n",[{Table}]),
     Val =
         try
             ets:delete(Table),
@@ -69,13 +75,15 @@ write({delete, Table}, State) ->
         end,
     {Val, State};
 write({delete, Table, Key}, State) ->
+    io:format("CONS DELETE: ~p~n",[{Table,Key}]),
     Val = try
               {ok, ets:delete(Table, Key)}
           catch _:E ->
               {error, E}
           end,
     {Val, State};
-write(_, State) ->
+write(Data, State) ->
+    io:format("CONS WRITE: ~p~n",[{Data}]),
     {{error, ets_write_badarg}, State}.
 
 list_keys(Table) ->

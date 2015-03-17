@@ -89,6 +89,9 @@
 -define(ETS_OPTS, [named_table, ordered_set, protected]).
 -endif.
 
+show() -> show(node()).
+show(Node) ->
+  [ {I,element(2,cr_log:get_entry(Node,I))} || I <- lists:seq(1,cr_log:get_last_index(Node)) ].
 
 %%====================================================================
 %% API
@@ -181,8 +184,8 @@ get_term(Peer, Index) ->
 init([Name, #rafter_opts{logdir = Logdir}]) ->
 
     io:format("RAFTER LOG ~p~n",[Name]),
-    LogName  = lists:concat([Logdir,"/rafter_",Name,".log"]),
-    MetaName = lists:concat([Logdir,"/rafter_",Name,".meta"]),
+    LogName  = lists:concat([Logdir,"/",Name,".log"]),
+    MetaName = lists:concat([Logdir,"/",Name,".meta"]),
     {ok, LogFile} = file:open(LogName, [append, read, binary, raw]),
     {ok, #file_info{size=Size}} = file:read_file_info(LogName),
     {ok, Meta} = read_metadata(MetaName, Size),

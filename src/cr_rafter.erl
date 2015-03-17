@@ -500,6 +500,7 @@ remove_followers(Servers, Followers0) ->
                 end, Followers0, Servers).
 
 append(Entry, #state{me=Me}=State) ->
+    io:format("RAFTER APPEND Me: ~p Entry ~p~n",[Me,Entry]),
     {ok, _Index} = cr_log:append(Me, [Entry]),
     send_append_entries(State).
 
@@ -509,6 +510,7 @@ append(Id, From, Entry, State, leader) ->
 
 append(Id, From, Entry,
        #state{me=Me, term=Term, client_reqs=Reqs}=State) ->
+    io:format("RAFTER APPEND Me: ~p Entry ~p~n",[Me,Entry]),
     {ok, Index} = cr_log:append(Me, [Entry]),
     {ok, Timer} = timer:send_after(?CLIENT_TIMEOUT, Me, {client_timeout, Id}),
     ClientRequest = #client_req{id=Id,
@@ -521,8 +523,7 @@ append(Id, From, Entry,
 setup_read_request(Id, From, Command, #state{send_clock=Clock,
                                              me=Me,
                                              term=Term}=State) ->
-    {ok, Timer} = timer:send_after(?CLIENT_TIMEOUT, Me,
-        {client_read_timeout, Clock, Id}),
+    {ok, Timer} = timer:send_after(?CLIENT_TIMEOUT, Me, {client_read_timeout, Clock, Id}),
     ReadRequest = #client_req{id=Id,
                               from=From,
                               term=Term,
@@ -959,11 +960,11 @@ rsend(To, #request_vote{from=From}=Msg) -> rsend(To, From, Msg);
 rsend(To, #append_entries{from=From}=Msg) -> rsend(To, From, Msg).
 rsend(To, From, Msg) ->
     spawn(fun() ->
-              case rafter_consensus_fsm:send_sync(To, Msg) of
+              case cr_rafter:send_sync(To, Msg) of
                   Rpy when is_record(Rpy, vote) orelse
                            is_record(Rpy, append_entries_rpy) ->
-                      rafter_consensus_fsm:send(From, Rpy);
+                      cr_rafter:send(From, Rpy);
                   E ->
-                      lager:error("Error sending ~p to To ~p: ~p", [Msg, To, E])
+                      io:format("Error sending ~p to To ~p: ~p", [Msg, To, E])
               end
           end).
