@@ -101,19 +101,28 @@ entry_to_binary(#rafter_entry{type=noop, term=Term, index=Index, cmd=noop}) ->
 entry_to_binary(#rafter_entry{type=config, term=Term, index=Index, cmd=Data}) ->
     entry_to_binary(?CONFIG, Term, Index, Data);
 entry_to_binary(#rafter_entry{type=op, term=Term, index=Index, cmd=Data}) ->
-    entry_to_binary(?OP, Term, Index, Data).
+    entry_to_binary(?OP, Term, Index, Data);
+entry_to_binary(#rafter_entry{type=OP, term=Term, index=Index, cmd=Data}) ->
+    entry_to_binary(OP, Term, Index, binary_to_term(Data)).
 
 entry_to_binary(Type, Term, Index, Data) ->
     BinData = term_to_binary(Data),
     B0 = <<Type:8, Term:64, Index:64, (byte_size(BinData)):32, BinData/binary>>,
-    Sha1 = crypto:hash(sha, B0),
+    <<Sha1:20/binary,_/binary>> = crypto:hmac(sha256, cr:secret(), B0),
     <<Sha1/binary, B0/binary>>.
 
 binary_to_entry(<<Sha1:20/binary, Type:8, Term:64, Index:64, Size:32, Data/binary>>) ->
     %% We want to crash on badmatch here if if our log is corrupt
     %% TODO: Allow an operator to repair the log by truncating at that point
     %% or repair each entry 1 by 1 by consulting a good log.
-    %Sha1 = crypto:hash(sha, <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
+    <<Sha:20/binary,_/binary>> = crypto:hmac(sha256, cr:secret(),
+                       <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
+
+    case Sha == Sha1 of
+          true -> skip;
+          false when Index == 0 -> skip;
+          false -> io:format("Diff Error: ~p~n",[Index]) end,
+
     binary_to_entry(Type, Term, Index, Data).
 
 binary_to_entry(?NOOP, Term, Index, _Data) ->
@@ -572,7 +581,12 @@ read_data(File, Location, <<Sha1:20/binary, Type:8, Term:64, Index:64, Size:32>>
     case file:pread(File, Location, Size) of
         {ok, Data} ->
             %% Fail-fast Integrity check. TODO: Offer user repair options?
-            %Sha1 = crypto:hash(sha, <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
+            <<Sha:20/binary,_/binary>> = 
+            crypto:hmac(sha256, cr:secret(), <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
+            case Sha == Sha1 of
+                true -> skip;
+                false when Index == 0 -> skip;
+                false -> io:format("Diff Error: ~p~n",[Index]) end,
             NewLocation = Location + Size + ?TRAILER_SIZE,
             {entry, <<H/binary, Data/binary>>, NewLocation};
         eof ->

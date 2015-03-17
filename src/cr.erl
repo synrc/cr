@@ -16,3 +16,5 @@ config() ->
     {ok,Peers} = application:get_env(cr,peers),
     N = lists:map(fun({N,_,_,_})->N end,Peers),
     #config{state=transitional,oldservers=N,newservers=N}.
+
+secret() -> application:get_env(cr,secret,<<"ThisIsClassified">>).
