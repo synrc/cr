@@ -1,6 +1,8 @@
 -module(cr_vnode).
 -copyright('Maxim Sokhatsky').
 -include("cr.hrl").
+-include_lib("kvs/include/kvs.hrl").
+-include_lib("db/include/transaction.hrl").
 -compile(export_all).
 -record(state, {name,nodes}).
 -export(?GEN_SERVER).
@@ -19,6 +21,13 @@ handle_info({'EXIT', Pid,_}, #state{} = State) ->
 handle_info(_Info, State) ->
     error_logger:info_msg("VNODE: Info ~p~n",[_Info]),
     {noreply, State}.
+
+handle_call({transaction,Transaction},_,#state{name=Name}=Proc) ->
+    supervisor:start_child(xa_sup,
+                           cr_app:xa(Transaction#transaction.id,
+                           Name,
+                           Transaction)),
+    {reply,Transaction#transaction.id,Proc};
 
 handle_call(Request,_,Proc) ->
     error_logger:info_msg("VNODE: Call ~p~n",[Request]),

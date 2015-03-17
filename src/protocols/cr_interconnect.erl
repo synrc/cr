@@ -7,18 +7,14 @@
 sup() -> interconnect_sup.
 init([Name,Mod,Socket,Nodes]) -> #state{name=Name,module=Mod,socket=Socket,nodes=Nodes}.
 
-dispatch({'add_iterator',Object},State)  ->
-    kvs:add(Object),
-    State;
+reply(Socket,Result,State) -> gen_tcp:send(Socket,term_to_binary(Result)), State.
 
-dispatch({'get_container',Table,Key},#state{socket=Socket}=State)  ->
-    {ok,Record}=kvs:get(Table,Key),
-    gen_tcp:send(Socket,<<>>),
-    State;
+dispatch({Command,Object},#state{socket=Socket}=State) ->
+    io:format("CONS {_,_} VNODE command: ~p~n",[{Object}]),
+    reply(Socket,gen_server:call(cr:peer(cr:hash(Object)),{Command,Object}),State);
+
+dispatch({Command,Tx,Transaction}, #state{name=Name,socket=Socket}=State) ->
+    io:format("CONS {_,_,_} XA command: ~p~n",[{Transaction}]),
+    reply(Socket,gen_server:call(Tx,{Command,Transaction}),State);
 
 dispatch(_,State)  -> State.
-
-ring() -> cr_hash:fresh(5,node()).
-
-list_replicas(Key) ->
-    cr_hash:successors(cr_hash:key_of(Key),cr_hash:fresh(5,node())).

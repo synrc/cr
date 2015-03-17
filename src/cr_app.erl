@@ -15,12 +15,16 @@ vnode({I,N},Nodes)       -> {{I,N},{cr_vnode,start_link,
                             [{I,N},Nodes]},
                             permanent,2000,worker,[cr_vnode]}.
 
+xa(Id)                   -> {Id,{cr_xa,start_link,
+                            [Id]},
+                            permanent,infinity,worker,[cr_xa]}.
+
 log({I,N},Nodes)         -> {cr_log:logname(N),{cr_log,start_link,
                             [N,#rafter_opts{cluster=Nodes}]},
                             permanent,2000,worker,[cr_log]}.
 
 rafter({I,N},Nodes)      -> {N,{cr_rafter,start_link,
-                            [{I,N},#rafter_opts{state_machine=cr_rafterback,cluster=Nodes}]},
+                            [{I,N},#rafter_opts{state_machine=cr_replication,cluster=Nodes}]},
                             permanent,2000,worker,[cr_rafter]}.
 
 init([Nodes,Opts]) ->

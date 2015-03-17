@@ -1,16 +1,7 @@
 -module(cr_config).
-
+-compile(export_all).
 -include("rafter.hrl").
 
-%% API
--export([quorum/3, quorum_max/3, voters/1, voters/2, followers/2,
-         reconfig/2, allow_config/2, has_vote/2]).
-
-%%====================================================================
-%% API
-%%====================================================================
-
--spec quorum_max(peer(), #config{} | [], dict()) -> non_neg_integer().
 quorum_max(_Me, #config{state=blank}, _) -> 0;
 quorum_max(Me, #config{state=stable, oldservers=OldServers}, Responses) -> quorum_max(Me, OldServers, Responses);
 quorum_max(Me, #config{state=staging, oldservers=OldServers}, Responses) -> quorum_max(Me, OldServers, Responses);
@@ -27,7 +18,6 @@ quorum_max(Me, Servers, Responses) ->
     Values = sorted_values(Me, Servers, Responses),
     lists:nth(length(Values) div 2 + 1, Values).
 
--spec quorum(peer(), #config{} | list(), dict()) -> boolean().
 quorum(_Me, #config{state=blank}, _Responses) -> false;
 quorum(Me, #config{state=stable, oldservers=OldServers}, Responses) -> quorum(Me, OldServers, Responses);
 quorum(Me, #config{state=staging, oldservers=OldServers}, Responses) -> quorum(Me, OldServers, Responses);
@@ -49,43 +39,26 @@ quorum(Me, Servers, Responses) ->
             length(TrueResponses) > length(Servers)/2
     end.
 
-%% @doc list of voters excluding me
--spec voters(peer(), #config{}) -> list().
-voters(Me, Config) ->
-    lists:delete(Me, voters(Config)).
-
-%% @doc list of all voters
--spec voters(#config{}) -> list().
+voters(Me, Config) -> lists:delete(Me, voters(Config)).
 voters(#config{state=transitional, oldservers=Old, newservers=New}) -> sets:to_list(sets:from_list(Old ++ New));
 voters(#config{oldservers=Old}) -> Old.
 
--spec has_vote(peer(), #config{}) -> boolean().
 has_vote(_Me, #config{state=blank}) -> false;
 has_vote(Me, #config{state=transitional, oldservers=Old, newservers=New})-> lists:member(Me, Old) orelse lists:member(Me, New);
 has_vote(Me, #config{oldservers=Old}) -> lists:member(Me, Old).
 
-%% @doc All followers. In staging, some followers are not voters.
--spec followers(peer(), #config{}) -> list().
 followers(Me, #config{state=transitional, oldservers=Old, newservers=New}) -> lists:delete(Me, sets:to_list(sets:from_list(Old ++ New)));
 followers(Me, #config{state=staging, oldservers=Old, newservers=New}) -> lists:delete(Me, sets:to_list(sets:from_list(Old ++ New)));
 followers(Me, #config{oldservers=Old}) -> lists:delete(Me, Old).
 
-%% @doc Go right to stable mode if this is the initial configuration.
--spec reconfig(#config{}, list()) -> #config{}.
 reconfig(#config{state=blank}=Config, Servers) -> Config#config{state=stable, oldservers=Servers};
 reconfig(#config{state=stable}=Config, Servers) -> Config#config{state=transitional, newservers=Servers}.
 
--spec allow_config(#config{}, list()) -> boolean().
 allow_config(#config{state=blank}, _NewServers) -> true;
 allow_config(#config{state=stable, oldservers=OldServers}, NewServers) when NewServers =/= OldServers -> true;
 allow_config(#config{oldservers=OldServers}, NewServers) when NewServers =:= OldServers -> {error, not_modified};
 allow_config(_Config, _NewServers) -> {error, config_in_progress}.
 
-%%====================================================================
-%% Internal Functions
-%%====================================================================
-
--spec sorted_values(peer(), [peer()], dict()) -> [non_neg_integer()].
 sorted_values(Me, Servers, Responses) ->
     Vals = lists:sort(lists:map(fun(S) -> value(S, Responses) end, Servers)),
     case lists:member(Me, Servers) of
@@ -98,7 +71,6 @@ sorted_values(Me, Servers, Responses) ->
             Vals
     end.
 
--spec value(peer(), dict()) -> non_neg_integer().
 value(Peer, Responses) ->
     case dict:find(Peer, Responses) of
         {ok, Value} -> Value;

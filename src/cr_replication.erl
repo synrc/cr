@@ -1,4 +1,4 @@
--module(cr_rafterback).
+-module(cr_replication).
 -behaviour(rafter_backend).
 -export([init/1, stop/1, read/2, write/2]).
 -record(state, {peer :: atom() | {atom(), atom()}}).
@@ -54,6 +54,7 @@ write({new, Name}, State) ->
               {error, E}
           end,
     {Val, State};
+
 write({put, Table, Key, Value}, State) ->
     io:format("CONS PUT: ~p~n",[{Table, Key, Value}]),
     Val = try

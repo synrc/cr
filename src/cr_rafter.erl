@@ -45,6 +45,7 @@ init([Me, #rafter_opts{state_machine=StateMachine,cluster=Nodes}]) ->
     {ok, follower, NewState}.
 
 stop(Pid) -> gen_fsm:send_all_state_event(Pid, stop).
+op(Command) -> gen_fsm:sync_send_event(get_leader(node()), {op, Command}).
 op(Peer, Command) -> gen_fsm:sync_send_event(Peer, {op, Command}).
 read_op(Peer, Command) -> gen_fsm:sync_send_event(Peer, {read_op, Command}).
 set_config(Peer, Config) -> gen_fsm:sync_send_event(Peer, {set_config, Config}).

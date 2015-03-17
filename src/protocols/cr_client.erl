@@ -8,6 +8,10 @@ sup() -> client_sup.
 
 init([Name,Mod,Socket,Nodes]) -> #state{name=Name,module=Mod,socket=Socket,nodes=Nodes}.
 
-dispatch({'get',Args},State)  -> State;
+dispatch({Command,Object},#state{nodes=Nodes,name=Name,socket=Socket}=State) ->
+    Peer = cr:peer(cr:hash(Object)),
+    Result = gen_server:call(Peer,{Command,Object}),
+    gen_tcp:send(Socket,term_to_binary(Result)),
+    State;
 
 dispatch(_,State) -> State.
