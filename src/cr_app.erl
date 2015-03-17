@@ -9,8 +9,11 @@ sup(SupName) -> {SupName,{supervisor,start_link,[{local,SupName},cr_connection,[
                                  permanent,infinity,supervisor,[]}.
 
 init([Nodes,Opts]) ->
-    {ok, {{one_for_one, 5, 60}, lists:flatten([ protocol(O,Nodes) || O<-Opts ])
-                                       ++ [ sup(vnode_sup), log(atom_to_list(node()),Nodes) ] }}.
+    {ok, {{one_for_one, 5, 60},
+        lists:flatten([ protocol(O,Nodes) || O<-Opts ])
+                   ++ [ sup(vnode_sup) ]
+                   ++ [ log(atom_to_list(N),Nodes) || {N,_,_,_} <- Nodes] }}.
+
 stop(_)    -> ok.
 start(_,_) ->
     {ok,Peers}=application:get_env(cr,peers),

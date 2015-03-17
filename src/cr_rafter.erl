@@ -19,10 +19,10 @@ start_link({Index,Node}, Opts) ->
     gen_fsm:start_link(?MODULE, [StringName, Opts], []).
 
 init([Me, #rafter_opts{state_machine=StateMachine,cluster=Nodes}]) ->
-    io:format("RAFTER INIT~n"),
     Timer = gen_fsm:send_event_after(election_timeout(), timeout),
     #meta{voted_for=VotedFor, term=Term} = cr_log:get_metadata(Me),
     BackendState = StateMachine:init(Me),
+    io:format("RAFTER INIT Me: ~p~n",[Me]),
     State = #state{term=Term,
                    voted_for=VotedFor,
                    me=Me,
@@ -97,6 +97,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 
 %% Election timeout has expired. Go to candidate state iff we are a voter.
 follower(timeout, #state{config=Config, me=Me}=State0) ->
+    %io:format("RAFTER FOLLOWER timeout~n"),
     case rafter_config:has_vote(Me, Config) of
         false ->
             State = reset_timer(election_timeout(), State0),
@@ -109,23 +110,28 @@ follower(timeout, #state{config=Config, me=Me}=State0) ->
 
 %% Ignore stale messages.
 follower(#vote{}, State) ->
+    io:format("RAFTER FOLLOWER #vote~n"),
     {next_state, follower, State};
 follower(#append_entries_rpy{}, State) ->
+    io:format("RAFTER FOLLOWER #append_rpy~n"),
     {next_state, follower, State}.
 
 %% Vote for this candidate
 follower(#request_vote{}=RequestVote, _From, State) ->
+    io:format("RAFTER FOLLOWER #req_vote~n"),
     handle_request_vote(RequestVote, State);
 
 follower(#append_entries{term=Term}, _From,
          #state{term=CurrentTerm, me=Me}=State) when CurrentTerm > Term ->
     Rpy = #append_entries_rpy{from=Me, term=CurrentTerm, success=false},
+    io:format("RAFTER FOLLOWER #append~n"),
     {reply, Rpy, follower, State};
 
 follower(#append_entries{term=Term, from=From, prev_log_index=PrevLogIndex,
                          entries=Entries, commit_index=CommitIndex,
                          send_clock=Clock}=AppendEntries,
          _From, #state{me=Me}=State) ->
+    io:format("RAFTER FOLLOWER #append~n"),
     State2=set_term(Term, State),
     Rpy = #append_entries_rpy{send_clock=Clock,
                               term=Term,
@@ -152,6 +158,7 @@ follower(#append_entries{term=Term, from=From, prev_log_index=PrevLogIndex,
 %% entry in every log.
 follower({set_config, {Id, NewServers}}, From,
           #state{me=Me, followers=F, config=#config{state=blank}=C}=State) ->
+    io:format("RAFTER FOLLOWER set_config~n"),
     case lists:member(Me, NewServers) of
         true ->
             {Followers, Config} = reconfig(Me, F, C, NewServers, State),
@@ -169,28 +176,34 @@ follower({set_config, {Id, NewServers}}, From,
     end;
 
 follower({set_config, _}, _From, #state{leader=undefined, me=Me, config=C}=State) ->
+    io:format("RAFTER FOLLOWER set_config~n"),
     Error = no_leader_error(Me, C),
     {reply, {error, Error}, follower, State};
 
 follower({set_config, _}, _From, #state{leader=Leader}=State) ->
+    io:format("RAFTER FOLLOWER set_config~n"),
     Reply = {error, {redirect, Leader}},
     {reply, Reply, follower, State};
 
 follower({read_op, _}, _From, #state{me=Me, config=Config,
                                            leader=undefined}=State) ->
+    io:format("RAFTER FOLLOWER read_op~n"),
     Error = no_leader_error(Me, Config),
     {reply, {error, Error}, follower, State};
 
 follower({read_op, _}, _From, #state{leader=Leader}=State) ->
+    io:format("RAFTER FOLLOWER read_op~n"),
     Reply = {error, {redirect, Leader}},
     {reply, Reply, follower, State};
 
 follower({op, _Command}, _From, #state{me=Me, config=Config,
                                        leader=undefined}=State) ->
+    io:format("RAFTER FOLLOWER read_op~n"),
     Error = no_leader_error(Me, Config),
     {reply, {error, Error}, follower, State};
 
 follower({op, _Command}, _From, #state{leader=Leader}=State) ->
+    io:format("RAFTER FOLLOWER read_op~n"),
     Reply = {error, {redirect, Leader}},
     {reply, Reply, follower, State}.
 
@@ -198,6 +211,7 @@ follower({op, _Command}, _From, #state{leader=Leader}=State) ->
 %% get a quorum for our votes, so just reply to the user here and keep trying
 %% until the other nodes come up.
 candidate(timeout, #state{term=1, init_config=[_Id, From]}=S) ->
+    io:format("RAFTER CANDIDATE timeout~n"),
     State0 = reset_timer(election_timeout(), S),
     gen_fsm:reply(From, {error, peers_not_responding}),
     State = State0#state{init_config=no_client},
@@ -205,6 +219,7 @@ candidate(timeout, #state{term=1, init_config=[_Id, From]}=S) ->
 
 %% The election timeout has elapsed so start an election
 candidate(timeout, State) ->
+    io:format("RAFTER CANDIDATE timeout~n"),
     NewState = become_candidate(State),
     {next_state, candidate, NewState};
 
@@ -220,6 +235,7 @@ candidate(timeout, State) ->
 candidate(#vote{term=VoteTerm, success=false},
           #state{term=Term, init_config=[_Id, From]}=State)
          when VoteTerm > Term ->
+    io:format("RAFTER CANDIDATE #vote~n"),
     gen_fsm:reply(From, {error, invalid_initial_config}),
     State2 = State#state{init_config=undefined, config=#config{state=blank}},
     NewState = step_down(VoteTerm, State2),
@@ -228,22 +244,26 @@ candidate(#vote{term=VoteTerm, success=false},
 %% We are out of date. Go back to follower state.
 candidate(#vote{term=VoteTerm, success=false}, #state{term=Term}=State)
          when VoteTerm > Term ->
+    io:format("RAFTER CANDIDATE #vote~n"),
     NewState = step_down(VoteTerm, State),
     {next_state, follower, NewState};
 
 %% This is a stale vote from an old request. Ignore it.
 candidate(#vote{term=VoteTerm}, #state{term=CurrentTerm}=State)
           when VoteTerm < CurrentTerm ->
+    io:format("RAFTER CANDIDATE #vote~n"),
     {next_state, candidate, State};
 
 candidate(#vote{success=false, from=From}, #state{responses=Responses}=State) ->
     NewResponses = dict:store(From, false, Responses),
     NewState = State#state{responses=NewResponses},
+    io:format("RAFTER CANDIDATE #vote~n"),
     {next_state, candidate, NewState};
 
 %% Sweet, someone likes us! Do we have enough votes to get elected?
 candidate(#vote{success=true, from=From}, #state{responses=Responses, me=Me,
                                                  config=Config}=State) ->
+    io:format("RAFTER CANDIDATE #vote~n"),
     NewResponses = dict:store(From, true, Responses),
     case rafter_config:quorum(Me, Config, NewResponses) of
         true ->
@@ -255,6 +275,7 @@ candidate(#vote{success=true, from=From}, #state{responses=Responses, me=Me,
     end.
 
 candidate({set_config, _}, _From, State) ->
+    io:format("RAFTER CANDIDATE set_config~n"),
     Reply = {error, election_in_progress},
     {reply, Reply, follower, State};
 
@@ -263,9 +284,11 @@ candidate({set_config, _}, _From, State) ->
 candidate(#request_vote{term=RequestTerm}=RequestVote, _From,
           #state{term=Term}=State) when RequestTerm > Term ->
     NewState = step_down(RequestTerm, State),
+    io:format("RAFTER CANDIDATE #req_vote~n"),
     handle_request_vote(RequestVote, NewState);
 candidate(#request_vote{}, _From, #state{term=CurrentTerm, me=Me}=State) ->
     Vote = #vote{term=CurrentTerm, success=false, from=Me},
+    io:format("RAFTER CANDIDATE #req_vote~n"),
     {reply, Vote, candidate, State};
 
 %% Another peer is asserting itself as leader, and it must be correct because
@@ -275,6 +298,7 @@ candidate(#request_vote{}, _From, #state{term=CurrentTerm, me=Me}=State) ->
 %% response.
 candidate(#append_entries{term=RequestTerm}, _From,
           #state{init_config=[_, Client]}=State) ->
+    io:format("RAFTER CANDIDATE #append~n"),
     gen_fsm:reply(Client, {error, invalid_initial_config}),
     %% Set to complete, we don't want another misconfiguration
     State2 = State#state{init_config=complete, config=#config{state=blank}},
@@ -285,6 +309,7 @@ candidate(#append_entries{term=RequestTerm}, _From,
 candidate(#append_entries{term=RequestTerm}, _From,
           #state{init_config=no_client}=State) ->
     %% Set to complete, we don't want another misconfiguration
+    io:format("RAFTER CANDIDATE #append~n"),
     State2 = State#state{init_config=complete, config=#config{state=blank}},
     State3 = step_down(RequestTerm, State2),
     {next_state, follower, State3};
@@ -293,21 +318,26 @@ candidate(#append_entries{term=RequestTerm}, _From,
 %% step down and become follower. Otherwise do nothing
 candidate(#append_entries{term=RequestTerm}, _From, #state{term=CurrentTerm}=State)
         when RequestTerm >= CurrentTerm ->
+    io:format("RAFTER CANDIDATE #append~n"),
     NewState = step_down(RequestTerm, State),
     {next_state, follower, NewState};
 candidate(#append_entries{}, _From, State) ->
+    io:format("RAFTER CANDIDATE #append~n"),
     {next_state, candidate, State};
 
 %% We are in the middle of an election.
 %% Leader should always be undefined here.
 candidate({read_op, _}, _, #state{leader=undefined}=State) ->
+    io:format("RAFTER CANDIDATE read_op~n"),
     {reply, {error, election_in_progress}, candidate, State};
 candidate({op, _Command}, _From, #state{leader=undefined}=State) ->
+    io:format("RAFTER CANDIDATE op~n"),
     {reply, {error, election_in_progress}, candidate, State}.
 
 leader(timeout, #state{term=Term,
                        init_config=no_client,
                        config=C}=S) ->
+    io:format("RAFTER LEADER timout~n"),
     Entry = #rafter_entry{type=config, term=Term, cmd=C},
     State0 = append(Entry, S),
     State = reset_timer(heartbeat_timeout(), State0),
@@ -317,6 +347,7 @@ leader(timeout, #state{term=Term,
 %% We have just been elected leader because of an initial configuration.
 %% Append the initial config and set init_config=complete.
 leader(timeout, #state{term=Term, init_config=[Id, From], config=C}=S) ->
+    io:format("RAFTER LEADER timout~n"),
     State0 = reset_timer(heartbeat_timeout(), S),
     Entry = #rafter_entry{type=config, term=Term, cmd=C},
     State = append(Id, From, Entry, State0, leader),
@@ -324,6 +355,7 @@ leader(timeout, #state{term=Term, init_config=[Id, From], config=C}=S) ->
     {next_state, leader, NewState};
 
 leader(timeout, State0) ->
+    io:format("RAFTER LEADER timout~n"),
     State = reset_timer(heartbeat_timeout(), State0),
     NewState = send_append_entries(State),
     {next_state, leader, NewState};
@@ -331,17 +363,20 @@ leader(timeout, State0) ->
 %% We are out of date. Go back to follower state.
 leader(#append_entries_rpy{term=Term, success=false},
        #state{term=CurrentTerm}=State) when Term > CurrentTerm ->
+    io:format("RAFTER LEADER #append_rpy~n"),
     NewState = step_down(Term, State),
     {next_state, follower, NewState};
 
 %% This is a stale reply from an old request. Ignore it.
 leader(#append_entries_rpy{term=Term, success=true},
        #state{term=CurrentTerm}=State) when CurrentTerm > Term ->
+    io:format("RAFTER LEADER #append_rpy~n"),
     {next_state, leader, State};
 
 %% The follower is not synced yet. Try the previous entry
 leader(#append_entries_rpy{from=From, success=false},
        #state{followers=Followers, config=C, me=Me}=State) ->
+    io:format("RAFTER LEADER #append_rpy~n"),
        case lists:member(From, rafter_config:followers(Me, C)) of
            true ->
                NextIndex = decrement_follower_index(From, Followers),
@@ -356,6 +391,7 @@ leader(#append_entries_rpy{from=From, success=false},
 %% Success!
 leader(#append_entries_rpy{from=From, success=true}=Rpy,
        #state{followers=Followers, config=C, me=Me}=State) ->
+    io:format("RAFTER LEADER #append_rpy~n"),
     case lists:member(From, rafter_config:followers(Me, C)) of
         true ->
             NewState = save_rpy(Rpy, State),
@@ -377,33 +413,39 @@ leader(#append_entries_rpy{from=From, success=true}=Rpy,
 
 %% Ignore stale votes.
 leader(#vote{}, State) ->
+    io:format("RAFTER LEADER #vote~n"),
     {next_state, leader, State}.
 
 %% An out of date leader is sending append_entries, tell it to step down.
 leader(#append_entries{term=Term}, _From, #state{term=CurrentTerm, me=Me}=State)
         when Term < CurrentTerm ->
     Rpy = #append_entries_rpy{from=Me, term=CurrentTerm, success=false},
+    io:format("RAFTER LEADER #append~n"),
     {reply, Rpy, leader, State};
 
 %% We are out of date. Step down
 leader(#append_entries{term=Term}, _From, #state{term=CurrentTerm}=State)
         when Term > CurrentTerm ->
     NewState = step_down(Term, State),
+    io:format("RAFTER LEADER #append~n"),
     {next_state, follower, NewState};
 
 %% We are out of date. Step down
 leader(#request_vote{term=Term}, _From, #state{term=CurrentTerm}=State)
         when Term > CurrentTerm ->
     NewState = step_down(Term, State),
+    io:format("RAFTER LEADER #req_vote~n"),
     {next_state, follower, NewState};
 
 %% An out of date candidate is trying to steal our leadership role. Stop it.
 leader(#request_vote{}, _From, #state{me=Me, term=CurrentTerm}=State) ->
     Rpy = #vote{from=Me, term=CurrentTerm, success=false},
+    io:format("RAFTER LEADER #req_vote~n"),
     {reply, Rpy, leader, State};
 
 leader({set_config, {Id, NewServers}}, From,
        #state{me=Me, followers=F, term=Term, config=C}=State) ->
+    io:format("RAFTER LEADER set_config~n"),
     case rafter_config:allow_config(C, NewServers) of
         true ->
             {Followers, Config} = reconfig(Me, F, C, NewServers, State),
@@ -418,12 +460,14 @@ leader({set_config, {Id, NewServers}}, From,
 %% Handle client requests
 leader({read_op, {Id, Command}}, From, State) ->
     NewState = setup_read_request(Id, From, Command, State),
+    io:format("RAFTER LEADER read_op~n"),
     {next_state, leader, NewState};
 
 leader({op, {Id, Command}}, From,
         #state{term=Term}=State) ->
     Entry = #rafter_entry{type=op, term=Term, cmd=Command},
     NewState = append(Id, From, Entry, State, leader),
+    io:format("RAFTER LEADER op~n"),
     {next_state, leader, NewState}.
 
 %%=============================================================================

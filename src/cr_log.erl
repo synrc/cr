@@ -131,6 +131,7 @@ binary_to_entry(?OP, Term, Index, Data) ->
     #rafter_entry{type=op, term=Term, index=Index, cmd=binary_to_term(Data)}.
 
 start_link(Peer, Opts) ->
+    io:format("LOG start_link ~p~n",[Peer]),
     gen_server:start_link({local, logname(Peer)},?MODULE, [Peer, Opts], []).
 
 stop(Peer) ->
@@ -345,7 +346,7 @@ maybe_append(Index, Loc, [#rafter_entry{term=Term}=Entry | Entries],
             maybe_append(Index+1, eof, Entries, State2)
     end.
 
-logname(IndexNode) -> log.
+logname(IndexNode) -> list_to_atom(IndexNode).
 
 init_file(File, 0) ->
     {ok, Loc} = write_file_header(File),
