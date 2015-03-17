@@ -14,9 +14,9 @@
 -define(HEARTBEAT_TIMEOUT, 25).
 
 start_link({Index,Node}, Opts) ->
-    StringName = lists:concat([Index,Node]),
-    io:format("RAFTER start_link ~p~n",[StringName]),
-    gen_fsm:start_link(?MODULE, [StringName, Opts], []).
+    Name = list_to_atom(lists:concat([Index,':',Node])),
+    io:format("RAFTER start_link ~p~n",[{Index,Node}]),
+    gen_fsm:start_link({local,Node},?MODULE, [Node, Opts], []).
 
 init([Me, #rafter_opts{state_machine=StateMachine,cluster=Nodes}]) ->
     Timer = gen_fsm:send_event_after(election_timeout(), timeout),

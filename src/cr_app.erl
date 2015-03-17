@@ -3,16 +3,32 @@
 -include("rafter_opts.hrl").
 -compile(export_all).
 
-tcp(Name,Port,Mod,Nodes) -> {Name,{cr_tcp,start_link,[Name,Port,Mod,Nodes]},permanent,2000,worker,[cr_tcp]}.
-log(Name,Nodes) -> {Name,{cr_log,start_link,[Name,#rafter_opts{cluster=Nodes}]},permanent,2000,worker,[cr_log]}.
-sup(SupName) -> {SupName,{supervisor,start_link,[{local,SupName},cr_connection,[]]},
-                                 permanent,infinity,supervisor,[]}.
+tcp(Name,Port,Mod,Nodes) -> {Name,{cr_tcp,start_link,
+                            [Name,Port,Mod,Nodes]},
+                            permanent,2000,worker,[cr_tcp]}.
+
+pool(SupName)            -> {SupName,{supervisor,start_link,
+                            [{local,SupName},cr_connection,[]]},
+                            permanent,infinity,supervisor,[]}.
+
+vnode({I,N},Nodes)       -> {{I,N},{cr_vnode,start_link,
+                            [{I,N},Nodes]},
+                            permanent,2000,worker,[cr_vnode]}.
+
+log({I,N},Nodes)         -> {cr_log:logname(N),{cr_log,start_link,
+                            [N,#rafter_opts{cluster=Nodes}]},
+                            permanent,2000,worker,[cr_log]}.
+
+rafter({I,N},Nodes)      -> {N,{cr_rafter,start_link,
+                            [{I,N},#rafter_opts{state_machine=cr_rafterback,cluster=Nodes}]},
+                            permanent,2000,worker,[cr_rafter]}.
 
 init([Nodes,Opts]) ->
     {ok, {{one_for_one, 5, 60},
-        lists:flatten([ protocol(O,Nodes) || O<-Opts ])
-                   ++ [ sup(vnode_sup) ]
-                   ++ [ log(atom_to_list(N),Nodes) || {N,_,_,_} <- Nodes] }}.
+              lists:flatten([ protocol(O,Nodes) || O<-Opts ]
+                         ++ [ pool(vnode_sup) ]
+                         ++ [ log({0,N},Nodes)    || {N,_,_,_} <- Nodes]
+                         ++ [ rafter({0,N},Nodes) || {N,_,_,_} <- Nodes]) }}.
 
 stop(_)    -> ok.
 start(_,_) ->
@@ -27,22 +43,9 @@ start(_,_) ->
     Sup.
 
 protocol({Name,Port,Mod},Nodes) ->
-  SupName = list_to_atom(lists:concat([Name,'_sup'])),
+  SupName = list_to_atom(lists:concat([Name,'_',sup])),
   [ tcp(Name,Port,Mod,Nodes),     % TCP listener gen_server
-    sup(SupName)        ].           % Accepted Clients Supervisor
+    pool(SupName)        ].       % Accepted Clients Supervisor
 
-start_vnode(UniqueName,Nodes) ->
-    Restart = permanent,
-    Shutdown = 2000,
-    {Index,NodeName} = UniqueName,
-    ChildSpec = case Index of
-
-        0 -> {UniqueName,{cr_rafter,start_link,
-                [UniqueName,#rafter_opts{state_machine=cr_rafterback,cluster=Nodes}]},
-                     Restart,Shutdown,worker,[cr_rafter]};
-
-        _ -> {UniqueName,{cr_vnode, start_link,
-                [UniqueName,Nodes]},
-                     Restart,Shutdown,worker,[cr_vnode]}
-    end,
-    supervisor:start_child(vnode_sup,ChildSpec).
+start_vnode({0,_Name},_Nodes) -> skip;
+start_vnode({Index,Name},Nodes) -> supervisor:start_child(vnode_sup,vnode({Index,Name},Nodes)).

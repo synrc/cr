@@ -1,21 +1,11 @@
 -module(cr_log).
-
+-compile(export_all).
 -behaviour(gen_server).
-
 -include_lib("kernel/include/file.hrl").
-
+-include("cr.hrl").
 -include("rafter.hrl").
 -include("rafter_opts.hrl").
-
-%% API
--export([start_link/2, stop/1, append/2, check_and_append/3, binary_to_entry/1,
-        entry_to_binary/1,get_last_entry/1, get_entry/2, get_term/2,
-        get_last_index/1, get_last_term/1, get_config/1, set_metadata/3,
-        get_metadata/1]).
-
-%% gen_server callbacks
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-         code_change/3, format_status/2]).
+-export(?GEN_SERVER).
 
 %%=============================================================================
 %% Logfile Structure
@@ -196,7 +186,7 @@ init([Name, #rafter_opts{logdir = Logdir}]) ->
     {ok, Meta} = read_metadata(MetaName, Size),
     {ConfigLoc, Config, Term, Index, WriteLocation, Version} = init_file(LogFile, Size),
     LastEntry = find_last_entry(LogFile, WriteLocation),
-    HintsTable = list_to_atom("rafter_hints_" ++ Name),
+    HintsTable = Name,
     {ok, #state{logfile=LogFile,
                 version=Version,
                 meta_filename=MetaName,
@@ -346,7 +336,7 @@ maybe_append(Index, Loc, [#rafter_entry{term=Term}=Entry | Entries],
             maybe_append(Index+1, eof, Entries, State2)
     end.
 
-logname(IndexNode) -> list_to_atom(IndexNode).
+logname(IndexNode) -> list_to_atom(lists:concat(["log:",IndexNode])).
 
 init_file(File, 0) ->
     {ok, Loc} = write_file_header(File),
