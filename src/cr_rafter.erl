@@ -30,6 +30,7 @@ init([Me, #rafter_opts{state_machine=StateMachine,cluster=Nodes}]) ->
                    me=Me,
                    responses=dict:new(),
                    followers=dict:new(),
+                   commit_index = cr_log:get_last_index(node()),
                    timer=Timer,
                    state_machine=StateMachine,
                    backend_state=BackendState},
@@ -145,8 +146,7 @@ follower(#append_entries{term=Term, from=From, prev_log_index=PrevLogIndex,
         false ->
             {reply, Rpy, follower, State3};
         true ->
-            {ok, CurrentIndex} = cr_log:check_and_append(Me,
-                Entries, PrevLogIndex+1),
+            {ok, CurrentIndex} = cr_log:check_and_append(Me,Entries, PrevLogIndex+1),
             Config = cr_log:get_config(Me),
             NewRpy = Rpy#append_entries_rpy{success=true, index=CurrentIndex},
             State4 = commit_entries(CommitIndex, State3),
@@ -587,8 +587,7 @@ delete_client_req_by_index(Index, ClientRequests) ->
 %%      client requests that these commits affect. Return the new state.
 %%      Ignore already committed entries.
 commit_entries(NewCommitIndex, #state{commit_index=CommitIndex}=State)
-        when CommitIndex >= NewCommitIndex ->
-    State;
+    when CommitIndex >= NewCommitIndex -> State;
 commit_entries(NewCommitIndex, #state{commit_index=CommitIndex,
                                       state_machine=StateMachine,
                                       backend_state=BackendState,
@@ -727,18 +726,11 @@ save_rpy(#append_entries_rpy{from=From, index=Index, send_clock=Clock},
     NewClockResponses = save_greater(From, Clock, ClockResponses),
     State#state{responses=NewResponses, send_clock_responses=NewClockResponses}.
 
-save_greater(Key, Val, Dict) ->
-    CurrentVal = dict:find(Key, Dict),
-    save_greater(Key, Val, Dict, CurrentVal).
-
-save_greater(_Key, Val, Dict, {ok, CurrentVal}) when CurrentVal > Val ->
-    Dict;
-save_greater(_Key, CurrentVal, Dict, {ok, CurrentVal}) ->
-    Dict;
-save_greater(Key, Val, Dict, {ok, _}) ->
-    dict:store(Key, Val, Dict);
-save_greater(Key, Val, Dict, error) ->
-    dict:store(Key, Val, Dict).
+save_greater(Key, Val, Dict) -> save_greater(Key, Val, Dict, dict:find(Key, Dict)).
+save_greater(_Key, Val, Dict, {ok, CurrentVal}) when CurrentVal > Val -> Dict;
+save_greater(_Key, CurrentVal, Dict, {ok, CurrentVal}) -> Dict;
+save_greater(Key, Val, Dict, {ok, _}) -> dict:store(Key, Val, Dict);
+save_greater(Key, Val, Dict, error) -> dict:store(Key, Val, Dict).
 
 handle_request_vote(#request_vote{from=CandidateId, term=Term}=RequestVote,
   State) ->

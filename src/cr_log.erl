@@ -511,9 +511,7 @@ find_last_magic_number_in_block(Block) ->
             {ok, Index - 1}
     end.
 
-get_pos(File, Loc, Index) ->
-    get_pos(File, Loc, Index, 0).
-
+get_pos(File, Loc, Index) -> get_pos(File, Loc, Index, 0).
 get_pos(File, Loc, Index, Count) ->
     case file:pread(File, Loc, ?HEADER_SIZE) of
         {ok, <<_Sha1:20/binary, _Type:8, _Term:64, Index:64, _DataSize:32>>} ->
@@ -525,9 +523,7 @@ get_pos(File, Loc, Index, Count) ->
     end.
 
 %% @doc Find an entry at the given index in a file. Search forward from Loc.
-find_entry(File, Loc, Index) ->
-    find_entry(File, Loc, Index, 0).
-
+find_entry(File, Loc, Index) -> find_entry(File, Loc, Index, 0).
 find_entry(File, Loc, Index, Count) ->
     case file:pread(File, Loc, ?HEADER_SIZE) of
         {ok, <<_Sha1:20/binary, _Type:8, _Term:64, Index:64, _DataSize:32>>=Header} ->
