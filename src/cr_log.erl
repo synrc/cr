@@ -115,13 +115,13 @@ binary_to_entry(<<Sha1:20/binary, Type:8, Term:64, Index:64, Size:32, Data/binar
     %% We want to crash on badmatch here if if our log is corrupt
     %% TODO: Allow an operator to repair the log by truncating at that point
     %% or repair each entry 1 by 1 by consulting a good log.
-    <<Sha:20/binary,_/binary>> = crypto:hmac(sha256, cr:secret(),
+    <<Sha1:20/binary,_/binary>> = crypto:hmac(sha256, cr:secret(),
                        <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
 
-    case Sha == Sha1 of
-          true -> skip;
-          false when Index == 0 -> skip;
-          false -> io:format("Diff Error: ~p~n",[Index]) end,
+%    case Sha == Sha1 of
+%          true -> skip;
+%          false when Index == 0 -> skip;
+%          false -> io:format("Diff Error: ~p~n",[binary_to_entry(Type, Term, Index, Data)]) end,
 
     binary_to_entry(Type, Term, Index, Data).
 
@@ -409,11 +409,7 @@ write_entry(#rafter_entry{type=Type, cmd=Cmd}=Entry, S=#state{write_location=Loc
             last_entry=NewEntry}.
 
 read_config(File, Loc) ->
-    {entry, Data, _} = read_entry(File, Loc),
-    Config = case binary_to_entry(Data) of
-         #rafter_entry{type=config, cmd=C} -> C;
-         _ -> cr:config() end,
-    {ok, Config}.
+    {ok, cr:config()}.
 
 %% TODO: Write to a tmp file then rename so the write is always atomic and the
 %% metadata file cannot become partially written.
@@ -566,8 +562,6 @@ find_last_entry(File, WriteLocation) ->
 -spec read_entry(file:io_device(), non_neg_integer()) ->
     {entry, binary(), non_neg_integer()} | {skip, non_neg_integer()} | eof.
 read_entry(File, Location) ->
-    io:format("LOG read_entry file: ~p~n"
-                         "Location: ~p~n",[File,Location]),
     case file:pread(File, Location, ?HEADER_SIZE) of
         {ok, <<_Sha1:20/binary, _Type:8, _Term:64, _Index:64, _DataSize:32>>=Header} ->
             read_data(File, Location + ?HEADER_SIZE, Header);
@@ -581,12 +575,8 @@ read_data(File, Location, <<Sha1:20/binary, Type:8, Term:64, Index:64, Size:32>>
     case file:pread(File, Location, Size) of
         {ok, Data} ->
             %% Fail-fast Integrity check. TODO: Offer user repair options?
-            <<Sha:20/binary,_/binary>> = 
+            <<Sha1:20/binary,_/binary>> =
             crypto:hmac(sha256, cr:secret(), <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
-            case Sha == Sha1 of
-                true -> skip;
-                false when Index == 0 -> skip;
-                false -> io:format("Diff Error: ~p~n",[Index]) end,
             NewLocation = Location + Size + ?TRAILER_SIZE,
             {entry, <<H/binary, Data/binary>>, NewLocation};
         eof ->
