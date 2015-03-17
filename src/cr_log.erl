@@ -110,7 +110,7 @@ binary_to_entry(<<Sha1:20/binary, Type:8, Term:64, Index:64, Size:32, Data/binar
     %% We want to crash on badmatch here if if our log is corrupt
     %% TODO: Allow an operator to repair the log by truncating at that point
     %% or repair each entry 1 by 1 by consulting a good log.
-    Sha1 = crypto:hash(sha, <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
+    %Sha1 = crypto:hash(sha, <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
     binary_to_entry(Type, Term, Index, Data).
 
 binary_to_entry(?NOOP, Term, Index, _Data) ->
@@ -118,7 +118,9 @@ binary_to_entry(?NOOP, Term, Index, _Data) ->
 binary_to_entry(?CONFIG, Term, Index, Data) ->
     #rafter_entry{type=config, term=Term, index=Index, cmd=binary_to_term(Data)};
 binary_to_entry(?OP, Term, Index, Data) ->
-    #rafter_entry{type=op, term=Term, index=Index, cmd=binary_to_term(Data)}.
+    #rafter_entry{type=op, term=Term, index=Index, cmd=binary_to_term(Data)};
+binary_to_entry(OP, Term, Index, Data) ->
+    #rafter_entry{type=OP, term=Term, index=Index, cmd=Data}.
 
 start_link(Peer, Opts) ->
     io:format("LOG start_link ~p~n",[Peer]),
@@ -238,6 +240,7 @@ handle_call({check_and_append, Entries, Index}, _From, #state{logfile=File,
 handle_call({get_entry, Index}, _From, #state{logfile=File,
                                               hints=Hints}=State0) ->
     Loc = closest_forward_offset(Hints, Index),
+    %io:format("LOG get_entry ~p~n",[Index]),
     {Res, NewState} = 
     case find_entry(File, Loc, Index) of
         {not_found, Count} -> 
@@ -395,7 +398,9 @@ write_entry(#rafter_entry{type=Type, cmd=Cmd}=Entry, S=#state{write_location=Loc
 
 read_config(File, Loc) ->
     {entry, Data, _} = read_entry(File, Loc),
-    #rafter_entry{type=config, cmd=Config} = binary_to_entry(Data),
+    Config = case binary_to_entry(Data) of
+         #rafter_entry{type=config, cmd=C} -> C;
+         _ -> cr:config() end,
     {ok, Config}.
 
 %% TODO: Write to a tmp file then rename so the write is always atomic and the
@@ -549,6 +554,8 @@ find_last_entry(File, WriteLocation) ->
 -spec read_entry(file:io_device(), non_neg_integer()) ->
     {entry, binary(), non_neg_integer()} | {skip, non_neg_integer()} | eof.
 read_entry(File, Location) ->
+    io:format("LOG read_entry file: ~p~n"
+                         "Location: ~p~n",[File,Location]),
     case file:pread(File, Location, ?HEADER_SIZE) of
         {ok, <<_Sha1:20/binary, _Type:8, _Term:64, _Index:64, _DataSize:32>>=Header} ->
             read_data(File, Location + ?HEADER_SIZE, Header);
@@ -562,7 +569,7 @@ read_data(File, Location, <<Sha1:20/binary, Type:8, Term:64, Index:64, Size:32>>
     case file:pread(File, Location, Size) of
         {ok, Data} ->
             %% Fail-fast Integrity check. TODO: Offer user repair options?
-            Sha1 = crypto:hash(sha, <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
+            %Sha1 = crypto:hash(sha, <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
             NewLocation = Location + Size + ?TRAILER_SIZE,
             {entry, <<H/binary, Data/binary>>, NewLocation};
         eof ->

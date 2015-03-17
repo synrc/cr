@@ -33,10 +33,7 @@ init([Me, #rafter_opts{state_machine=StateMachine,cluster=Nodes}]) ->
                    timer=Timer,
                    state_machine=StateMachine,
                    backend_state=BackendState},
-    N = lists:map(fun({N,_,_,_})->N end,Nodes),
-    io:format("RAFTER INIT Nodes: ~p~n",[N]),
-    Config = #config{state=transitional,oldservers=N,newservers=N},
-             %cr_log:get_config(Me),
+    Config = cr:config(),
     NewState =
         case Config#config.state of
             blank ->
