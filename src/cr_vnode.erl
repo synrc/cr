@@ -5,16 +5,6 @@
 -record(state, {name,nodes}).
 -export(?GEN_SERVER).
 
-start_vnode(UniqueName,HashRing) ->
-    Restart = permanent,
-    Shutdown = 2000,
-    {Index,NodeName} = UniqueName,
-    VNode = case Index of
-                 0 -> cr_heart;
-                 _ -> cr_vnode end,
-    ChildSpec = {UniqueName,{VNode,start_link,[UniqueName,HashRing]},Restart,Shutdown,worker,[VNode]},
-    supervisor:start_child(vnode_sup,ChildSpec).
-
 start_link(UniqueName,HashRing) ->
     gen_server:start_link(?MODULE, [UniqueName,HashRing], []).
 
