@@ -100,7 +100,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %% Election timeout has expired. Go to candidate state iff we are a voter.
 follower(timeout, #state{config=Config, me=Me}=State0) ->
     %io:format("RAFTER FOLLOWER timeout~n"),
-    case rafter_config:has_vote(Me, Config) of
+    case cr_config:has_vote(Me, Config) of
         false ->
             State = reset_timer(election_timeout(), State0),
             NewState = State#state{leader=undefined},
@@ -266,7 +266,7 @@ candidate(#vote{success=true, from=From}, #state{responses=Responses, me=Me,
                                                  config=Config}=State) ->
     io:format("RAFTER CANDIDATE #vote~n"),
     NewResponses = dict:store(From, true, Responses),
-    case rafter_config:quorum(Me, Config, NewResponses) of
+    case cr_config:quorum(Me, Config, NewResponses) of
         true ->
             NewState = become_leader(State),
             {next_state, leader, NewState};
@@ -374,7 +374,7 @@ leader(#append_entries_rpy{term=Term, success=true},
 %% The follower is not synced yet. Try the previous entry
 leader(#append_entries_rpy{from=From, success=false},
        #state{followers=Followers, config=C, me=Me}=State) ->
-       case lists:member(From, rafter_config:followers(Me, C)) of
+       case lists:member(From, cr_config:followers(Me, C)) of
            true ->
                NextIndex = decrement_follower_index(From, Followers),
                NewFollowers = dict:store(From, NextIndex, Followers),
@@ -388,7 +388,7 @@ leader(#append_entries_rpy{from=From, success=false},
 %% Success!
 leader(#append_entries_rpy{from=From, success=true}=Rpy,
        #state{followers=Followers, config=C, me=Me}=State) ->
-    case lists:member(From, rafter_config:followers(Me, C)) of
+    case lists:member(From, cr_config:followers(Me, C)) of
         true ->
             NewState = save_rpy(Rpy, State),
             State2 = maybe_commit(NewState),
@@ -442,7 +442,7 @@ leader(#request_vote{}, _From, #state{me=Me, term=CurrentTerm}=State) ->
 leader({set_config, {Id, NewServers}}, From,
        #state{me=Me, followers=F, term=Term, config=C}=State) ->
     io:format("RAFTER LEADER set_config~n"),
-    case rafter_config:allow_config(C, NewServers) of
+    case cr_config:allow_config(C, NewServers) of
         true ->
             {Followers, Config} = reconfig(Me, F, C, NewServers, State),
             Entry = #rafter_entry{type=config, term=Term, cmd=Config},
@@ -471,7 +471,7 @@ leader({op, {Id, Command}}, From,
 %%=============================================================================
 
 no_leader_error(Me, Config) ->
-    case rafter_config:has_vote(Me, Config) of
+    case cr_config:has_vote(Me, Config) of
         false ->
             not_consensus_group_member;
         true ->
@@ -479,8 +479,8 @@ no_leader_error(Me, Config) ->
     end.
 
 reconfig(Me, OldFollowers, Config0, NewServers, State) ->
-    Config = rafter_config:reconfig(Config0, NewServers),
-    NewFollowers = rafter_config:followers(Me, Config),
+    Config = cr_config:reconfig(Config0, NewServers),
+    NewFollowers = cr_config:followers(Me, Config),
     OldSet = sets:from_list([K || {K, _} <- dict:to_list(OldFollowers)]),
     NewSet = sets:from_list(NewFollowers),
     AddedServers = sets:to_list(sets:subtract(NewSet, OldSet)),
@@ -654,7 +654,7 @@ maybe_send_client_reply(_, _, State, _) ->
 maybe_send_read_replies(#state{me=Me,
                              config=Config,
                              send_clock_responses=Responses}=State0) ->
-    Clock = rafter_config:quorum_max(Me, Config, Responses),
+    Clock = cr_config:quorum_max(Me, Config, Responses),
     {ok, Requests, State} = find_eligible_read_requests(Clock, State0),
     NewState = send_client_read_replies(Requests, State),
     NewState.
@@ -693,11 +693,11 @@ maybe_commit(#state{me=Me,
                     commit_index=CommitIndex,
                     config=Config,
                     responses=Responses}=State) ->
-    Min = rafter_config:quorum_max(Me, Config, Responses),
+    Min = cr_config:quorum_max(Me, Config, Responses),
     case Min > CommitIndex andalso safe_to_commit(Min, State) of
         true ->
             NewState = commit_entries(Min, State),
-            case rafter_config:has_vote(Me, NewState#state.config) of
+            case cr_config:has_vote(Me, NewState#state.config) of
                 true ->
                     NewState;
                 false ->
@@ -821,7 +821,7 @@ decrement_follower_index(From, Followers) ->
 %%      the asynchrnony of the consensus fsm, while maintaining the rpc
 %%      semantics for the request_vote message as described in the raft paper.
 request_votes(#state{config=Config, term=Term, me=Me}) ->
-    Voters = rafter_config:voters(Me, Config),
+    Voters = cr_config:voters(Me, Config),
     Msg = #request_vote{term=Term,
                         from=Me,
                         last_log_index=cr_log:get_last_index(Me),
@@ -857,7 +857,7 @@ become_leader(#state{me=Me, term=Term, init_config=InitConfig}=State) ->
 
 
 initialize_followers(#state{me=Me, config=Config}) ->
-    Peers = rafter_config:followers(Me, Config),
+    Peers = cr_config:followers(Me, Config),
     NextIndex = cr_log:get_last_index(Me) + 1,
     Followers = [{Peer, NextIndex} || Peer <- Peers],
     dict:from_list(Followers).
