@@ -4,7 +4,7 @@
 -compile(export_all).
 
 tcp(Name,Port,Mod,Nodes) -> {Name,{cr_tcp,start_link,[Name,Port,Mod,Nodes]},permanent,2000,worker,[cr_tcp]}.
-log(Name,Nodes) -> {log,{cr_log,start_link,[Name,#rafter_opts{cluster=Nodes}]},permanent,2000,worker,[cr_log]}.
+log(Name,Nodes) -> {Name,{cr_log,start_link,[Name,#rafter_opts{cluster=Nodes}]},permanent,2000,worker,[cr_log]}.
 sup(SupName) -> {SupName,{supervisor,start_link,[{local,SupName},cr_connection,[]]},
                                  permanent,infinity,supervisor,[]}.
 

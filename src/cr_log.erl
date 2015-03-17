@@ -131,7 +131,7 @@ binary_to_entry(?OP, Term, Index, Data) ->
     #rafter_entry{type=op, term=Term, index=Index, cmd=binary_to_term(Data)}.
 
 start_link(Peer, Opts) ->
-    gen_server:start_link({local, log},?MODULE, [Peer, Opts], []).
+    gen_server:start_link({local, logname(Peer)},?MODULE, [Peer, Opts], []).
 
 stop(Peer) ->
     gen_server:cast(logname(Peer), stop).
