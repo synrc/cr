@@ -3,7 +3,7 @@
 -include_lib("kvs/include/kvs.hrl").
 -include("cr.hrl").
 -compile(export_all).
--record(state, {name,vnode}).
+-record(state, {name,vnode,documents}).
 -export(?GEN_SERVER).
 
 start_link([UniqueName,VNode,Object]) ->
@@ -27,20 +27,28 @@ handle_info(_Info, State) ->
 
 quorum(A) -> {ok,A}.
 
-handle_call({prepare,Transaction}, State) ->
-    io:format("XA PREPARE: ~p~n",[{Transaction}]),
-    Val = try kvs:put(Transaction)
+handle_call({prepare,Refer,Chain,Tx}, _, #state{name=Name}=State) ->
+    io:format("XA PREPARE: ~p~n",[{Tx}]),
+    Val = try kvs:put(Tx)
        catch _:E -> {error, E} end,
-    {Val, State};
-
-handle_call({commit, Transaction}, State) ->
-    io:format("XA PREPARE: ~p~n",[{Transaction}]),
-    Val = try kvs:link(Transaction)
-       catch _:E -> {error, E} end,
+    Command = case Chain of
+                  [Name] -> {commit,Refer,cr:chain(Tx),Tx};
+                   [H|T] -> {prepare,Refer,T,Tx} end,
+    gen_server:call(Refer,Command),
     {reply, Val, State};
 
-handle_call({rollback, Transaction}, State) ->
-    io:format("XA PREPARE: ~p~n",[{Transaction}]),
+handle_call({commit,Refer,Chain,Tx}, _, State) ->
+    io:format("XA COMMIT: ~p~n",[{Tx}]),
+    Val = try kvs:add(Tx)
+       catch _:E -> {error, E} end,
+    Command = case Chain of
+                  [Name] -> {Refer,stop};
+                   [H|T] -> {commit,Refer,T,Tx} end,
+    gen_server:call(Refer,Command),
+    {reply, Val, State};
+
+handle_call({rollback, Transaction}, _, State) ->
+    io:format("XA ROLLBACK: ~p~n",[{Transaction}]),
     Val = try kvs:delete(Transaction)
        catch _:E -> {error, E} end,
     {reply,Val,State};

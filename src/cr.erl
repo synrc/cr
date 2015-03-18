@@ -22,6 +22,7 @@ peers() -> {ok,Peers}=application:get_env(cr,peers),Peers.
 peers(N) -> lists:zip(lists:seq(1,N),lists:seq(1,N)).
 hash(Object) -> hd(seq(Object)).
 rep(Object) -> roll(element(2,hash(Object))).
+chain(Object) -> lists:map(fun(X) -> lists:nth(X,cr:peers()) end,cr:roll(element(2,cr:hash(Object)))).
 roll(N) -> lists:seq(N,length(peers())) ++ lists:seq(1,N-1).
 seq(Object) -> lists:keydelete(0,1,cr_hash:successors(cr_hash:key_of(Object),ring())).
 ring() -> ring(4).

@@ -22,12 +22,19 @@ handle_info(_Info, State) ->
     error_logger:info_msg("VNODE: Info ~p~n",[_Info]),
     {noreply, State}.
 
-handle_call({transaction,Transaction},_,#state{name=Name}=Proc) ->
-    supervisor:start_child(xa_sup,
-                           cr_app:xa(Transaction#transaction.id,
+handle_call({transaction,Tx},_,#state{name=Name}=Proc) ->
+
+    {ok,Pid} = supervisor:start_child(xa_sup,
+                           cr_app:xa(Tx#transaction.id,
                            Name,
-                           Transaction)),
-    {reply,Transaction#transaction.id,Proc};
+                           Tx)),
+
+    Chain = cr:chain(Tx),
+    Refer = self(),
+
+    gen_server:call(Tx#transaction.id,{prepare,Refer,Chain,Tx}),
+
+    {reply,Tx#transaction.id,Proc};
 
 handle_call(Request,_,Proc) ->
     error_logger:info_msg("VNODE: Call ~p~n",[Request]),
