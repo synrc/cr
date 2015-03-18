@@ -29,7 +29,7 @@ quorum(A) -> {ok,A}.
 
 continuation(Refer,Command) -> gen_server:call(Refer,Command).
 
-handle_call({prepare,Refer,Chain,Tx}, _, #state{name=Name,storage=Storage}=State) ->
+handle_call({prepare,Refer,[H|T]=Chain,Tx}, _, #state{name=Name,storage=Storage}=State) ->
     io:format("XA PREPARE: ~p~n",[{Tx}]),
     Val = try Storage:dispatch({prepare,Tx})
        catch _:E -> {error, E} end,
@@ -37,10 +37,10 @@ handle_call({prepare,Refer,Chain,Tx}, _, #state{name=Name,storage=Storage}=State
         [_,A={rollback,_,_,_}] -> A;
                     [[Name],_] -> {commit,Refer,cr:chain(Tx),Tx};
                      [[H|T],_] -> {prepare,Refer,T,Tx} end,
-    continuation(Refer,Command),
+    continuation(H,Command),
     {reply, Val, State};
 
-handle_call({commit,Refer,Chain,Tx}, _, #state{storage=Storage}=State) ->
+handle_call({commit,Refer,[H|T]=Chain,Tx}, _, #state{storage=Storage}=State) ->
     io:format("XA COMMIT: ~p~n",[{Tx}]),
     Val = try Storage:dispatch({commit,Tx})
        catch _:E -> {rollback,Refer,Chain,Tx} end,
@@ -48,10 +48,10 @@ handle_call({commit,Refer,Chain,Tx}, _, #state{storage=Storage}=State) ->
         [_,A={rollback,_,_,_}] -> A;
                       [Name,_] -> stop;
                      [[H|T],_] -> {commit,Refer,T,Tx} end,
-    continuation(Refer,Command),
+    continuation(H,Command),
     {reply, Val, State};
 
-handle_call({rollback,Refer,Chain,Tx}, _, #state{name=Name,storage=Storage}=State) ->
+handle_call({rollback,Refer,[H|T]=Chain,Tx}, _, #state{name=Name,storage=Storage}=State) ->
     io:format("XA ROLLBACK: ~p~n",[{Tx}]),
     Val = try Storage:dispatch({rollback,Tx})
        catch _:E -> io:format("XA ROLLBACK Error: ~p~n",[{E}]),
@@ -59,7 +59,7 @@ handle_call({rollback,Refer,Chain,Tx}, _, #state{name=Name,storage=Storage}=Stat
     Command = case Chain of
                   [Name] -> stop;
                    [H|T] -> {rollback,Refer,T,Tx} end,
-    continuation(Refer,Command),
+    continuation(H,Command),
     {reply,Val,State};
 
 handle_call(Request,_,Proc) ->

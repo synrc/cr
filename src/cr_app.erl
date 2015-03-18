@@ -31,8 +31,8 @@ init([Nodes,Opts]) ->
     {ok, {{one_for_one, 5, 60},
               lists:flatten([ protocol(O,Nodes) || O<-Opts ]
                          ++ [ pool(vnode_sup) ]
-                         ++ [ log({0,N},Nodes)    || {N,_,_,_} <- Nodes]
-                         ++ [ rafter({0,N},Nodes) || {N,_,_,_} <- Nodes]) }}.
+                         ++ [ log({0,N},Nodes)    || {N,_,_,_} <- Nodes, N == node()]
+                         ++ [ rafter({0,N},Nodes) || {N,_,_,_} <- Nodes, N == node()]) }}.
 
 stop(_)    -> ok.
 start(_,_) ->
