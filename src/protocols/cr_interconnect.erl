@@ -15,6 +15,6 @@ dispatch({Command,Object},#state{socket=Socket}=State) ->
 
 dispatch({Command,Tx,Transaction}, #state{name=Name,socket=Socket}=State) ->
     io:format("CONS {_,_,_} XA command: ~p~n",[{Transaction}]),
-    reply(Socket,gen_server:call(Tx,{Command,Transaction}),State);
+    reply(Socket,gen_server:call(element(2,Tx),{Command,Transaction}),State);
 
 dispatch(_,State)  -> State.

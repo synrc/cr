@@ -953,7 +953,7 @@ rsend(To, #request_vote{from=From}=Msg) -> rsend(To, From, Msg);
 rsend(To, #append_entries{from=From}=Msg) -> rsend(To, From, Msg).
 rsend(To, From, Msg) ->
     spawn(fun() ->
-              case cr_rafter:send_sync(To, Msg) of
+              case cr_rafter:send_sync({To,To}, Msg) of
                   Rpy when is_record(Rpy, vote) orelse
                            is_record(Rpy, append_entries_rpy) ->
                       cr_rafter:send(From, Rpy);
