@@ -23,6 +23,7 @@ relx     := "{release,{$(RELEASE),\"$(VER)\"},[$(RELEASE)]}.\\n{include_erts,tru
 
 test: eunit ct
 deps up:
+	mkdir -p data
 	mad $@
 compile: deps
 	mad compile skip_deps=true
