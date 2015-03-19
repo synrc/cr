@@ -45,13 +45,13 @@ init([Me, #rafter_opts{state_machine=StateMachine,cluster=Nodes}]) ->
         end,
     {ok, follower, NewState}.
 
-stop(Pid) -> gen_fsm:send_all_state_event(Pid, stop).
+stop(Pid) -> gen_fsm:send_all_state_event({Pid,Pid}, stop).
 op(Command) -> gen_fsm:sync_send_event(get_leader(node()), {op, Command}).
-op(Peer, Command) -> gen_fsm:sync_send_event(Peer, {op, Command}).
-read_op(Peer, Command) -> gen_fsm:sync_send_event(Peer, {read_op, Command}).
-set_config(Peer, Config) -> gen_fsm:sync_send_event(Peer, {set_config, Config}).
-get_leader(Pid) -> gen_fsm:sync_send_all_state_event(Pid, get_leader).
-send(To, Msg) -> catch gen_fsm:send_event(To, Msg).
+op(Peer, Command) -> gen_fsm:sync_send_event({Peer,Peer}, {op, Command}).
+read_op(Peer, Command) -> gen_fsm:sync_send_event({Peer,Peer}, {read_op, Command}).
+set_config(Peer, Config) -> gen_fsm:sync_send_event({Peer,Peer}, {set_config, Config}).
+get_leader(Pid) -> gen_fsm:sync_send_all_state_event({Pid,Pid}, get_leader).
+send(To, Msg) -> catch gen_fsm:send_event({To,To}, Msg).
 send_sync(To, Msg) -> Timeout=100, gen_fsm:sync_send_event(To, Msg, Timeout).
 format_status(_, [_, State]) -> Data = lager:pr(State, ?MODULE), [{data, [{"StateData", Data}]}].
 
@@ -102,7 +102,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 
 %% Election timeout has expired. Go to candidate state iff we are a voter.
 follower(timeout, #state{config=Config, me=Me}=State0) ->
-    %io:format("RAFTER FOLLOWER timeout~n"),
+    io:format("RAFTER FOLLOWER timeout~n"),
     case cr_config:has_vote(Me, Config) of
         false ->
             State = reset_timer(election_timeout(), State0),
