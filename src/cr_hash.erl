@@ -1,4 +1,5 @@
 -module(cr_hash).
+-description('Hash-ring utilities').
 -compile(export_all).
 -define(RINGTOP, trunc(math:pow(2,160)-1)).  % SHA-1 space
 -include_lib("eunit/include/eunit.hrl").

@@ -1,4 +1,5 @@
 -module(cr_vnode).
+-description('Hash-ring vnode for sequence/transactions supervision').
 -copyright('Maxim Sokhatsky').
 -include("cr.hrl").
 -include_lib("kvs/include/kvs.hrl").

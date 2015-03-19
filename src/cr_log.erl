@@ -1,4 +1,5 @@
 -module(cr_log).
+-description('RAFT protocol replication log').
 -compile(export_all).
 -behaviour(gen_server).
 -include_lib("kernel/include/file.hrl").

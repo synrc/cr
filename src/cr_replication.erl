@@ -1,7 +1,10 @@
 -module(cr_replication).
+-description('RAFT protocol replication log backend').
 -behaviour(rafter_backend).
 -export([init/1, stop/1, read/2, write/2]).
 -record(state, {peer :: atom() | {atom(), atom()}}).
+
+% Issue commands only if you want them to be saved in cluster status log.
 
 init(Peer) ->
     io:format("RAFTER BACK INIT ~p~n",[Peer]),

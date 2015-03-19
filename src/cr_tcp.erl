@@ -1,4 +1,5 @@
 -module(cr_tcp).
+-description('prim_inet based TCP non-blocking listener').
 -copyright('Maxim Sokhatsky').
 -behaviour(gen_server).
 -include("cr.hrl").

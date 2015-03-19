@@ -1,4 +1,5 @@
 -module(cr_xa).
+-description('Distributed transaction context').
 -copyright('Maxim Sokhatsky').
 -include_lib("kvs/include/kvs.hrl").
 -include("cr.hrl").

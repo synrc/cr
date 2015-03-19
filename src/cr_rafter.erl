@@ -1,4 +1,5 @@
 -module(cr_rafter).
+-description('RAFT protocol').
 -behaviour(gen_fsm).
 -include("rafter.hrl").
 -include("rafter_consensus_fsm.hrl").
