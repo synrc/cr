@@ -68,6 +68,27 @@ are come to the chain's head, all reads come to chain's tail.
 
 <p><center>Picture 1. Chain<br><br><img src="images/replicas.svg" height=200></center></p>
 
+<h3>Failures</h3>
+
+<p><b>Head Failure</b>. Query processing continues uninterrupted.
+Update processing is unavailable for 2 message delivery delays
+while the master broadcasts a message to the new head and its
+successor, and then it notifies all clients of the new head
+using a broadcast.</p>
+
+<p><b>Middle Server Failure</b>. Query processing continues
+uninterrupted. Update processing can be delayed but update
+requests are not lost, hence no transient outage is experienced,
+provided some server in a prefix of the chain that has received
+the request remains operating. Failure of a middle server can
+lead to a delay in processing an update request—the protocol
+of Figure 3 involves 4 message delivery delays.</p>
+
+<p><b>Tail Failure</b>. Query and update processing
+are both unavailable for 2 message delivery delays
+while the master sends a message to the new tail and
+then notifies all clients of the new tail using a broadcast.</p>
+
 <h3>Sync Protocol</h3>
 
 <div class=note style="background-color:#FAFAFA;"><p><b>Sync on recovery</b>
@@ -192,7 +213,6 @@ protocol({Name,Port,Mod},HashRing) ->
  {1242276391731267480473132107808840566707542661516,<0.59.0>},
  {1205738850797994907518039986990933491216144347942,<0.60.0>}]
 </pre></div>
-
 
 
 </div>
