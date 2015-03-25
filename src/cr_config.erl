@@ -75,3 +75,5 @@ value(Peer, Responses) ->
     case dict:find(Peer, Responses) of
         {ok, Value} -> Value;
         error -> 0 end.
+
+log_modules() -> [cr,cr_vnode,cr_xa].
