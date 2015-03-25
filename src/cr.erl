@@ -31,3 +31,8 @@ ring(C) -> {Nodes,[{0,1}|Rest]} = cr_hash:fresh(length(peers())*C,1),
            {Nodes,[{0,0}|lists:map(fun({{I,1},X})->{I,(X-1) div C+1} end,
                     lists:zip(Rest,lists:seq(1,length(Rest))))]}.
 peer({I,N}) -> element(1,lists:nth(N,peers())).
+nodex(Node) -> string:str(cr:peers(),[lists:keyfind(Node,1,cr:peers())]).
+tx(Record) when is_tuple(Record) ->
+    Chain = cr:chain(element(2,Record)),
+    {I,N} = hd(Chain),
+    gen_server:call({{I,N},N},{pending,{prepare,self(),Chain,Record}}).

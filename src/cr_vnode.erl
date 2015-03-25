@@ -1,5 +1,5 @@
 -module(cr_vnode).
--description('Hash-ring vnode for sequence/transactions supervision').
+-description('Hash-ring vnode manager').
 -copyright('Maxim Sokhatsky').
 -include("cr.hrl").
 -include_lib("kvs/include/kvs.hrl").
@@ -30,13 +30,13 @@ replay(Storage,#operation{body=Message}) -> Storage:dispatch(Message).
 
 continuation(Next,{_,_,[],Tx}=Command,State) -> {stop, {error, servers_down}, State};
 continuation(Next,{_,_,[{I,N}|T],Tx}=Command,State) ->
-    Id = Tx#transaction.id,
+    Id = element(2,Tx),
     case gen_server:call({{I,N},N},Command) of
          {ok,Saved} -> {reply, kvs:add(#operation{id={sent,Id},feed_id=sent}), State};
          {error,Reason} -> continuation(Next,Command,State) end.
 
 handle_call({pending,{_,_,[{I,N}|T],Tx}=Message}, _, #state{name=Name,storage=Storage}=State) ->
-    Id = Tx#transaction.id,
+    Id = element(2,Tx),
     kvs:add(#operation{id=Id,body=Message,feed_id=Name,status=pending}),
     gen_server:cast(Name,Message),
     {reply,{ok,queued}, State};
@@ -46,7 +46,7 @@ handle_call(Request,_,Proc) ->
     {reply,ok,Proc}.
 
 handle_cast({prepare,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=Storage}=State) ->
-    Id = Tx#transaction.id,
+    Id = element(2,Tx),
     io:format("XA PREPARE: ~p~n",[{Tx}]),
     Val = try {ok,Op} = kvs:get(operation,Id),
               replay(Storage,Op),
@@ -59,7 +59,7 @@ handle_cast({prepare,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=St
     continuation(H,Command,State);
 
 handle_cast({commit,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=Storage}=State) ->
-    Id = Tx#transaction.id,
+    Id = element(2,Tx),
     io:format("XA COMMIT: ~p~n",[{Tx}]),
     Val = try {ok,Op} = kvs:get(operation,Id),
               replay(Storage,Op),

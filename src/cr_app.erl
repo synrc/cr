@@ -15,10 +15,6 @@ vnode({I,N},Nodes)       -> {{I,N},{cr_vnode,start_link,
                             [{I,N},Nodes]},
                             permanent,2000,worker,[cr_vnode]}.
 
-xa(Id)                   -> {Id,{cr_xa,start_link,
-                            [Id]},
-                            permanent,infinity,worker,[cr_xa]}.
-
 log({I,N},Nodes)         -> {cr_log:logname(N),{cr_log,start_link,
                             [N,#rafter_opts{cluster=Nodes}]},
                             permanent,2000,worker,[cr_log]}.
@@ -38,12 +34,12 @@ stop(_)    -> ok.
 start(_,_) ->
     {ok,Peers}=application:get_env(cr,peers),
     {N,P1,P2,P3}=lists:keyfind(node(),1,Peers),
-    HashRing = {Partitions,VNodes} = cr_hash:fresh(8,node()),
+    {_,VNodes} = cr:ring(),
     Sup = supervisor:start_link({local, cr_sup}, ?MODULE,
                 [  Peers, [ { interconnect, P1, cr_interconnect },
                             { ping,         P2, cr_ping },
                             { client,       P3, cr_client } ]]),
-    [ start_vnode({Index,Node},Peers) || {Index,Node} <- VNodes ],
+    [ start_vnode({Index,Node},Peers)|| {Index,Node} <- VNodes, Node == cr:nodex(node()) ],
     Sup.
 
 protocol({Name,Port,Mod},Nodes) ->
