@@ -39,7 +39,7 @@ tx(Record) when is_tuple(Record) ->
               "     Peer: ~p~n"
               "    Chain: ~p~n",[Record,Peer,Chain]),
     Pid    = vpid(I,Peer),
-    gen_server:call({Pid,Peer},{pending,{prepare,Client,tl(Chain),Record}}).
+    gen_server:call(Pid,{pending,{prepare,Client,tl(Chain),Record}}).
 
 stack(Error, Reason) ->
     Stacktrace = [case A of
