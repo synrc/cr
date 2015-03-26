@@ -1,0 +1,4 @@
+{build, "./mad dep com pla"}.
+{test_path, "ebin"}.
+{deps, "deps"}.
+{test_root, "test"}.
