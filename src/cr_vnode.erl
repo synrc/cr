@@ -32,12 +32,14 @@ continuation(Next,{_,_,[],Tx}=Command,State) -> {stop, {error, servers_down}, St
 continuation(Next,{C,S,[{I,N}|T],Tx}=Command,State) ->
     Id = element(2,Tx),
     Peer = cr:peer({I,N}),
+    io:format("{I:N:P}=~p~n",[{I,N,Peer}]),
     Vpid = cr:vpid(I,Peer),
     io:format("{I:N:P:V}=~p~n",[{I,N,Peer,Vpid}]),
     io:format("continuation call(~p,~p)~n",[{Vpid,Peer},{pending,Command}]),
     case gen_server:call(Vpid,{pending,Command}) of
-         {ok,Saved} -> ok;
-         {error,Reason} -> timer:sleep(1000), continuation(Next,Command,State) end.
+         {ok,Saved} -> io:format("CAST OK"), {noreply,State};
+         {error,Reason} -> io:format("CAST ERROR"),
+            timer:sleep(1000), continuation(Next,Command,State) end.
 
 handle_call({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, _, #state{name=Name,storage=Storage}=State) ->
     Id = element(2,Tx),
@@ -62,7 +64,7 @@ handle_cast({prepare,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=St
     Command = case [Chain,Val] of
         [_,A={rollback,_,_,_}] -> A;
                     [[Name],_] -> {commit,H,cr:chain(Id),Tx};
-                     [[H|T],_] -> {prepare,H,Chain,Tx} end,
+                     [[H|T],_] -> {prepare,H,T,Tx} end,
     continuation(H,Command,State);
 
 handle_cast({commit,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=Storage}=State) ->
