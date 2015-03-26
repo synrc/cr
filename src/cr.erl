@@ -40,3 +40,19 @@ tx(Record) when is_tuple(Record) ->
               "    Chain: ~p~n",[Record,Peer,Chain]),
     Pid    = vpid(I,Peer),
     gen_server:call({Pid,Peer},{pending,{prepare,Client,tl(Chain),Record}}).
+
+stack(Error, Reason) ->
+    Stacktrace = [case A of
+         { Module,Function,Arity,Location} ->
+             { Module,Function,Arity,proplists:get_value(line, Location) };
+         Else -> Else end
+    || A <- erlang:get_stacktrace()],
+    [Error, Reason, Stacktrace].
+
+
+error_page(Class,Error) ->
+    io_lib:format("ERROR:  ~w:~w~n~n",[Class,Error]) ++
+    "STACK: " ++
+    [ io_lib:format("\t~w:~w/~w:~w\n",
+        [ Module,Function,Arity,proplists:get_value(line, Location) ])
+    ||  { Module,Function,Arity,Location} <- erlang:get_stacktrace() ].

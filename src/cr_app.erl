@@ -11,8 +11,8 @@ pool(SupName)            -> {SupName,{supervisor,start_link,
                             [{local,SupName},cr_connection,[]]},
                             permanent,infinity,supervisor,[]}.
 
-vnode({I,N},Nodes)       -> {I,{cr_vnode,start_link,
-                            [{I,N},Nodes]},
+vnode({I,N})             -> {I,{cr_vnode,start_link,
+                            [{I,N},cr_kvs]},
                             permanent,2000,worker,[cr_vnode]}.
 
 log({I,N},Nodes)         -> {cr_log:logname(N),{cr_log,start_link,
@@ -39,7 +39,7 @@ start(_,_) ->
                 [  Peers, [ { interconnect, P1, cr_interconnect },
                             { ping,         P2, cr_ping },
                             { client,       P3, cr_client } ]]),
-    [ start_vnode({Index,Node},Peers)|| {Index,Node} <- VNodes, Node == cr:nodex(node()) ],
+    [ start_vnode({Index,Node}) || {Index,Node} <- VNodes, Node == cr:nodex(node()) ],
     Sup.
 
 protocol({Name,Port,Mod},Nodes) ->
@@ -47,5 +47,5 @@ protocol({Name,Port,Mod},Nodes) ->
   [ tcp(Name,Port,Mod,Nodes),     % TCP listener gen_server
     pool(SupName)        ].       % Accepted Clients Supervisor
 
-start_vnode({0,_Name},_Nodes) -> skip;
-start_vnode({Index,Name},Nodes) -> supervisor:start_child(vnode_sup,vnode({Index,Name},Nodes)).
+start_vnode({0,_Name}) -> skip;
+start_vnode({Index,Name}) -> supervisor:start_child(vnode_sup,vnode({Index,Name})).
