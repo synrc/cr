@@ -35,6 +35,7 @@ start(_,_) ->
     {ok,Peers}=application:get_env(cr,peers),
     {N,P1,P2,P3}=lists:keyfind(node(),1,Peers),
     {_,VNodes} = cr:ring(),
+    kvs:join(),
     Sup = supervisor:start_link({local, cr_sup}, ?MODULE,
                 [  Peers, [ { interconnect, P1, cr_interconnect },
                             { ping,         P2, cr_ping },
