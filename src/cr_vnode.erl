@@ -28,7 +28,7 @@ handle_info(_Info, State) ->
 quorum(A) -> {ok,A}.
 replay(Storage,#operation{body=Message}) -> Storage:dispatch(Message).
 
-continuation(Next,{_,_,[],Tx}=Command,State) -> {stop, {error, servers_down}, State};
+continuation(Next,{_,_,[],Tx}=Command,State) -> {noreply, State};
 continuation(Next,{C,S,[{I,N}|T],Tx}=Command,State) ->
     Id = element(2,Tx),
     Peer = cr:peer({I,N}),
@@ -73,10 +73,11 @@ handle_cast({commit,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=Sto
     Val = try {ok,Op} = kvs:get(operation,Id),
 %              replay(Storage,Op),
               kvs:put(Op#operation{status=commited})
-       catch _:E -> {error, E} end,
+       catch _:E -> io:format("COMMIT ERROR"),
+                    {error, E} end,
     Command = case [Chain,Val] of
         [_,A={rollback,_,_,_}] -> A;
-                    [[Name],_] -> stop;
+                    [[Name],_] -> {nop,self(),[],[]};
                      [[H|T],_] -> {commit,self(),T,Tx} end,
     continuation(H,Command,State).
 
