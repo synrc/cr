@@ -37,8 +37,8 @@ continuation(Next,{C,S,[{I,N}|T],Tx}=Command,State) ->
     io:format("{I:N:P:V}=~p~n",[{I,N,Peer,Vpid}]),
     io:format("continuation call(~p,~p)~n",[{Vpid,Peer},{pending,Command}]),
     case gen_server:call(Vpid,{pending,Command}) of
-         {ok,Saved} -> io:format("CAST OK"), {noreply,State};
-         {error,Reason} -> io:format("CAST ERROR"),
+         {ok,Saved} -> io:format("CAST OK~n"), {noreply,State};
+         {error,Reason} -> io:format("CAST ERROR~n"),
             timer:sleep(1000), continuation(Next,Command,State) end.
 
 handle_call({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, _, #state{name=Name,storage=Storage}=State) ->
@@ -63,21 +63,21 @@ handle_cast({prepare,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=St
               {error, E} end,
     Command = case [Chain,Val] of
         [_,A={rollback,_,_,_}] -> A;
-                    [[Name],_] -> {commit,H,cr:chain(Id),Tx};
-                     [[H|T],_] -> {prepare,H,T,Tx} end,
+                    [[Name],_] -> {commit,self(),cr:chain(Id),Tx};
+                     [[H|T],_] -> {prepare,self(),T,Tx} end,
     continuation(H,Command,State);
 
 handle_cast({commit,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=Storage}=State) ->
     Id = element(2,Tx),
     io:format("XA COMMIT: ~p~n",[{Tx}]),
     Val = try {ok,Op} = kvs:get(operation,Id),
-              replay(Storage,Op),
+%              replay(Storage,Op),
               kvs:put(Op#operation{status=commited})
        catch _:E -> {error, E} end,
     Command = case [Chain,Val] of
         [_,A={rollback,_,_,_}] -> A;
                     [[Name],_] -> stop;
-                     [[H|T],_] -> {commit,H,T,Tx} end,
+                     [[H|T],_] -> {commit,self(),T,Tx} end,
     continuation(H,Command,State).
 
 terminate(_Reason, #state{}) -> ok.
