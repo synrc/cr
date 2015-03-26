@@ -32,13 +32,14 @@ continuation(Next,{_,_,[],Tx}=Command,State) -> {stop, {error, servers_down}, St
 continuation(Next,{_,_,[{I,N}|T],Tx}=Command,State) ->
     Id = element(2,Tx),
     case gen_server:call({{I,N},N},Command) of
-         {ok,Saved} -> {reply, kvs:add(#operation{id={sent,Id},feed_id=sent}), State};
+         {ok,Saved} -> {reply, kvs:put(Command#operation{status=sent}), State};
          {error,Reason} -> continuation(Next,Command,State) end.
 
 handle_call({pending,{_,_,[{I,N}|T],Tx}=Message}, _, #state{name=Name,storage=Storage}=State) ->
     Id = element(2,Tx),
-    kvs:add(#operation{id=Id,body=Message,feed_id=Name,status=pending}),
-    gen_server:cast(Name,Message),
+    Res = kvs:add(#operation{id=Id,body=Message,feed_id=Name,status=pending}),
+    io:format("XA QUEUE: ~p~n",[Res]),
+    gen_server:cast({I,cr:peer({I,N})},Message),
     {reply,{ok,queued}, State};
 
 handle_call(Request,_,Proc) ->

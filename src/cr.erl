@@ -7,11 +7,8 @@
 encode(Msg) -> term_to_binary(Msg).
 decode(Bin) -> binary_to_term(Bin).
 
-set_socket(Pid, Socket) when is_pid(Pid), is_port(Socket) ->
-    gen_fsm:send_event(Pid, {socket_ready, Socket}).
-
-send(Pid, Message) when is_pid(Pid)  ->
-    gen_fsm:send_event(Pid, {out, Message}).
+set_socket(Pid, Socket) when is_pid(Pid), is_port(Socket) -> gen_fsm:send_event(Pid, {socket_ready, Socket}).
+send(Pid, Message) when is_pid(Pid)  -> gen_fsm:send_event(Pid, {out, Message}).
 
 config() ->
     {ok,Peers} = application:get_env(cr,peers),
@@ -31,8 +28,15 @@ ring(C) -> {Nodes,[{0,1}|Rest]} = cr_hash:fresh(length(peers())*C,1),
            {Nodes,[{0,0}|lists:map(fun({{I,1},X})->{I,(X-1) div C+1} end,
                     lists:zip(Rest,lists:seq(1,length(Rest))))]}.
 peer({I,N}) -> element(1,lists:nth(N,peers())).
-nodex(Node) -> string:str(cr:peers(),[lists:keyfind(Node,1,cr:peers())]).
+nodex(Node) -> string:str(cr:peers(),[lists:keyfind(Node,1,cr:peers())]) + 1.
+vpid(I,Node) -> {_,P,_,_}=lists:keyfind(I,1,supervisor:which_children({vnode_sup,Node})), P.
 tx(Record) when is_tuple(Record) ->
-    Chain = cr:chain(element(2,Record)),
-    {I,N} = hd(Chain),
-    gen_server:call({{I,N},N},{pending,{prepare,self(),Chain,Record}}).
+    Chain  = chain(element(2,Record)),
+    Client = self(),
+    {I,N}  = hd(Chain),
+    Peer   = peer({I,N}),
+    Pid    = vpid(I,Peer),
+    io:format("TX Record: ~p~n"
+              "     Peer: ~p~n"
+              "    Chain: ~p~n",[Record,Peer,Chain]),
+    gen_server:call({Pid,Peer},{pending,{prepare,Client,Chain,Record}}).

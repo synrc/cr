@@ -11,7 +11,7 @@ pool(SupName)            -> {SupName,{supervisor,start_link,
                             [{local,SupName},cr_connection,[]]},
                             permanent,infinity,supervisor,[]}.
 
-vnode({I,N},Nodes)       -> {{I,N},{cr_vnode,start_link,
+vnode({I,N},Nodes)       -> {I,{cr_vnode,start_link,
                             [{I,N},Nodes]},
                             permanent,2000,worker,[cr_vnode]}.
 
