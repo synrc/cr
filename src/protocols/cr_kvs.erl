@@ -5,8 +5,7 @@
 
 dispatch({commit,_,_,Tx})  ->
     io:format("KVS LINK~n"),
-    kvs:delete(element(1,Tx),element(2,Tx)),
-    kvs:add(Tx);
+    kvs:link(Tx);
 
 dispatch({prepare,_,_,Tx})  ->
     io:format("KVS CREATE~n"),

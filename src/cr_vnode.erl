@@ -1,5 +1,5 @@
 -module(cr_vnode).
--description('Hash-ring vnode manager').
+-description('Hash-ring Transaction Coordinator').
 -copyright('Maxim Sokhatsky').
 -include("cr.hrl").
 -include_lib("kvs/include/kvs.hrl").
@@ -59,7 +59,7 @@ handle_cast({prepare,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=St
        catch E:R ->
               io:format("PREPARE ~p ERROR ~p~n",[Storage,R]),
               io:format("~p~n",[cr:stack(E,R)]),
-              {error, E} end,
+              {rollback, Sender, Chain, Tx} end,
     Command = case [Chain,Val] of
         [_,A={rollback,_,_,_}] -> A;
                     [[Name],_] -> {commit,self(),cr:chain(Id),Tx};
@@ -74,7 +74,7 @@ handle_cast({commit,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=Sto
               kvs:put(Op#operation{status=commited})
        catch E:R -> io:format("COMMIT ~p ERROR ~p~n",[Storage,R]),
                     io:format("~p~n",[cr:stack(E,R)]),
-                    {error, E} end,
+                    {rollback,Sender,Chain,Tx} end,
     Command = case [Chain,Val] of
         [_,A={rollback,_,_,_}] -> A;
                     [[Name],_] -> {nop,self(),[],[]};

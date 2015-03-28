@@ -41,10 +41,10 @@ and track the transactions history log up to merging and cut-offs.
 <h3>Features</h3>
 
 <p>
-<ul><li>Byzantine Chain Replication protocol</li>
+<ul><li>HMAC signing for Byzantine capabilities</li>
 <li>Distributed transaction on replicas sequence</li>
 <li>Separate endpoints for HEART, CLIENT and SERVER protocols</li>
-<li>Quorum N+1 in 2N+1 for accepting writes</li>
+<li>Quorum 2N+1 in 3N+1 for accepting writes</li>
 <li>Linear consistent ring hashing</li>
 <li>Automatic stand-by switchover</li>
 <li>Data sync on recovery</li>
@@ -63,6 +63,7 @@ and track the transactions history log up to merging and cut-offs.
 traversal command performing forward over the chain. In case with
 <b>commit</b> backward propagation it means also XA protocol. All writes
 are come to the chain's head, all reads come to chain's tail.
+In original protocol backward propagation is ACK 
 </p></div>
 
 
@@ -201,6 +202,10 @@ protocol({Name,Port,Mod},HashRing) ->
 </pre></div>
 
 <h3>Hash Ring</h3>
+
+<p>Bulding a consistent hash ring is a key feature
+that opens a door to the distributed system. CR is using <b>basho</b>
+chash module.</p>
 
 <div class=note>
 <pre>
