@@ -45,12 +45,11 @@ handle_call({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, _, #state{name=Name,stora
     Id = element(2,Tx),
     kvs:info(?MODULE,"XA RECEIVE: ~p~n",[{Id,Message,Name}]),
     Operation = #operation{name=Cmd,body=Message,feed_id=Name,status=pending},
-    {ok,Saved} = kvs:add(Operation#operation{id=kvs:next_id(operation,1)}),
                   %cr_log:kvs_log(node(),Operation),
-    This = self(),
-    spawn(fun() -> try gen_server:cast(This,Saved)
-          catch E:R -> kvs:info(?MODULE,"PENDING ASYNC ERROR ~p~n",[cr:stack(E,R)]) end end),
-    {reply, {ok,Saved}, State};
+    This  = self(),
+    spawn(fun() -> try gen_server:cast(This,Operation)
+                 catch E:R -> kvs:info(?MODULE,"PENDING ASYNC ERROR ~p~n",[cr:stack(E,R)]) end end),
+    {reply, {ok,queued}, State};
 
 handle_call(Request,_,Proc) ->
     kvs:info(?MODULE,"VNODE: Call ~p~n",[Request]),
@@ -60,6 +59,7 @@ handle_cast(#operation{name=prepare,body=Message}=Operation, #state{name=Name,st
     {prepare,Sender,[H|T]=Chain,Tx} = Message,
     Id = element(2,Tx),
     kvs:info("XA PREPARE: ~p~n",[Id]),
+    kvs:add(Operation#operation{id=kvs:next_id(operation,1)}),
     Val = try kvs_replay(Operation, State, replayed)
        catch E:R ->
               kvs:info("PREPARE ~p ERROR ~p~n",[Storage,R]),
