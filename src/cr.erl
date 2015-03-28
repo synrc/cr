@@ -25,7 +25,9 @@ roll(N) -> lists:seq(N,length(peers())) ++ lists:seq(1,N-1).
 seq(Object) -> lists:keydelete(0,1,cr_hash:successors(cr_hash:key_of(Object),ring())).
 peer({I,N}) -> element(1,lists:nth(N,peers())).
 nodex(Node) -> string:str(cr:peers(),[lists:keyfind(Node,1,cr:peers())]).
-vpid(I,Node) -> {I,P,_,_}=lists:keyfind(I,1,supervisor:which_children({vnode_sup,Node})), P.
+vpid({I,Node}) -> {I,P,_,_}=lists:keyfind(I,1,supervisor:which_children({vnode_sup,Node})), P.
+local(Object) -> {I,N}=lists:keyfind(cr:nodex(node()),2,cr:chain(Object)),
+                 {I,P,_,_}=lists:keyfind(I,1,supervisor:which_children(vnode_sup)), P.
 ring() -> ring(4).
 
 ring(C) -> {Nodes,[{0,1}|Rest]} = cr_hash:fresh(length(peers())*C,1),
@@ -38,14 +40,7 @@ chain(Object) ->
               cr:roll(element(2,cr:hash(Object)))).
 
 tx(Record) when is_tuple(Record) ->
-    Chain  = chain(element(2,Record)),
-    Client = self(),
-    {I,N}  = hd(Chain),
-    Peer   = peer({I,N}),
-    kvs:info("TX from: ~p to: ~p~n"
-             "  Chain: ~p~n",[node(),Peer,Chain]),
-    Pid    = vpid(I,Peer),
-    gen_server:cast(Pid,{pending,{prepare,Client,Chain,Record}}).
+    gen_server:cast(local(Record),{client,self(),chain(element(2,Record)),Record}).
 
 stack(Error, Reason) ->
     Stacktrace = [case A of

@@ -43,7 +43,7 @@ continuation(Next,{_,_,[],Tx}=Command,State) -> {noreply, State};
 continuation(Next,{C,S,[{I,N}|T],Tx}=Command,State) ->
     Id = element(2,Tx),
     Peer = cr:peer({I,N}),
-    Vpid = cr:vpid(I,Peer),
+    Vpid = cr:vpid({I,Peer}),
     case gen_server:call(Vpid,{pending,Command}) of
              {ok,Saved} -> kvs:info("XA SENT OK from ~p to ~p~n",[node(),Peer]), {noreply,State};
          {error,Reason} -> kvs:info("XA SENDING ERROR: ~p~n",[Reason]),
@@ -57,6 +57,14 @@ handle_call({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, _, #state{name=Name,stora
 handle_call(Request,_,Proc) ->
     kvs:info(?MODULE,"VNODE: Call ~p~n",[Request]),
     {reply,ok,Proc}.
+
+handle_cast({client,Client,Chain,Record}, #state{name=Name,storage=Storage}=State) ->
+    spawn(fun() ->
+        {I,N}  = hd(Chain),
+        gen_server:cast(
+            {cr:vpid({I,N}),cr:peer({I,N})},
+            {pending,{prepare,Client,Chain,Record}}) end),
+    {noreply, State};
 
 handle_cast({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, #state{name=Name,storage=Storage}=State) ->
     kvs_log(Message,State),
