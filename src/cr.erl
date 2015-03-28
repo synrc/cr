@@ -42,8 +42,8 @@ tx(Record) when is_tuple(Record) ->
     Client = self(),
     {I,N}  = hd(Chain),
     Peer   = peer({I,N}),
-    io:format("TX from: ~p to: ~p~n"
-              "  Chain: ~p~n",[node(),Peer,Chain]),
+    kvs:info("TX from: ~p to: ~p~n"
+             "  Chain: ~p~n",[node(),Peer,Chain]),
     Pid    = vpid(I,Peer),
     gen_server:call(Pid,{pending,{prepare,Client,Chain,Record}}).
 
@@ -63,12 +63,12 @@ error_page(Class,Error) ->
         [ Module,Function,Arity,proplists:get_value(line, Location) ])
     ||  { Module,Function,Arity,Location} <- erlang:get_stacktrace() ].
 
-test() ->
-    Num = 10,
+test() -> test(10).
+test(Num) ->
     O1 = lists:foldl(fun({_,_,_,A,_,_},Acc) -> A+Acc end,0,kvs:all(log)),
     T1 = length(kvs:all(transaction)),
+    kvs:info(?MODULE,"Ops before: ~p~n",[O1]),
     [cr:tx(#transaction{id=kvs:next_id(transaction,1)})||I<-lists:seq(1,Num)],
     O2 = lists:foldl(fun({_,_,_,A,_,_},Acc) -> A+Acc end,0,kvs:all(log)),
     T2 = length(kvs:all(transaction)),
-    O2 = Num * 2 + O1,
-    Num = T2-T1.
+    kvs:info(?MODULE,"Ops after: ~p~n",[O2]).

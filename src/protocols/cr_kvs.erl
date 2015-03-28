@@ -4,15 +4,15 @@
 -compile(export_all).
 
 dispatch({prepare,_,_,Tx}, {state,Name,_,_})  ->
-    io:format("KVS CREATE~n"),
+    kvs:info(?MODULE,"KVS PUT ~p:~p~n",[element(1,Tx),element(2,Tx)]),
     kvs:put(Tx);
 
 dispatch({commit,_,_,Tx}, {state,Name,_,_})  ->
-    io:format("KVS LINK~n"),
+    kvs:info(?MODULE,"KVS LINK ~p:~p~n",[element(1,Tx),element(2,Tx)]),
     kvs:link(Tx);
 
 dispatch({rollback,_,_,Tx}, {state,Name,_,_})  ->
-    io:format("KVS CLEAN~n"),
-    kvs:delete(Tx);
+    kvs:info(?MODULE,"KVS REMOVE ~p:~p~n",[element(1,Tx),element(2,Tx)]),
+    kvs:remove(Tx);
 
 dispatch(_,_)  -> ok.

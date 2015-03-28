@@ -118,12 +118,6 @@ binary_to_entry(<<Sha1:20/binary, Type:8, Term:64, Index:64, Size:32, Data/binar
     %% or repair each entry 1 by 1 by consulting a good log.
     <<Sha1:20/binary,_/binary>> = crypto:hmac(sha256, cr:secret(),
                        <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
-
-%    case Sha == Sha1 of
-%          true -> skip;
-%          false when Index == 0 -> skip;
-%          false -> io:format("Diff Error: ~p~n",[binary_to_entry(Type, Term, Index, Data)]) end,
-
     binary_to_entry(Type, Term, Index, Data).
 
 binary_to_entry(?NOOP, Term, Index, _Data) ->
@@ -136,7 +130,6 @@ binary_to_entry(OP, Term, Index, Data) ->
     #rafter_entry{type=OP, term=Term, index=Index, cmd=Data}.
 
 start_link(Peer, Opts) ->
-    io:format("LOG start_link ~p~n",[Peer]),
     gen_server:start_link({local, logname(Peer)},?MODULE, [Peer, Opts], []).
 
 stop(Peer) ->
@@ -177,7 +170,6 @@ get_last_term(Peer) ->
     end.
 
 get_metadata(Peer) ->
-    io:format("RAFTER GET METADATA ~p~n",[Peer]),
     gen_server:call(logname(Peer), get_metadata).
 
 set_metadata(Peer, VotedFor, Term) ->
@@ -198,8 +190,6 @@ get_term(Peer, Index) ->
 %% gen_server callbacks
 %%====================================================================
 init([Name, #rafter_opts{logdir = Logdir}]) ->
-
-    io:format("RAFTER LOG ~p~n",[Name]),
     LogName  = lists:concat([Logdir,"/",Name,".log"]),
     MetaName = lists:concat([Logdir,"/",Name,".meta"]),
     {ok, LogFile} = file:open(LogName, [append, read, binary, raw]),
@@ -230,8 +220,7 @@ handle_call({append, Entries}, _From, #state{logfile=File}=State) ->
     {reply, {ok, Index}, NewState};
 
 handle_call({kvs_log, Operation}, _From, #state{logfile=File}=State) ->
-    Id = kvs:next_id(operation,1),
-    {reply, kvs:add(Operation#operation{id=Id}), State};
+    {reply, kvs:add(Operation#operation{id=kvs:next_id(operation,1)}), State};
 
 handle_call({kvs_replay, Operation, {state,Name,Nodes,Storage}, Status}, _From, #state{}=State) ->
     Storage:dispatch(Operation#operation.body,{state,Name,Nodes,Storage}),
@@ -267,7 +256,6 @@ handle_call({check_and_append, Entries, Index}, _From, #state{logfile=File,
 handle_call({get_entry, Index}, _From, #state{logfile=File,
                                               hints=Hints}=State0) ->
     Loc = closest_forward_offset(Hints, Index),
-    %io:format("LOG get_entry ~p~n",[Index]),
     {Res, NewState} = 
     case find_entry(File, Loc, Index) of
         {not_found, Count} -> 
@@ -438,7 +426,7 @@ read_metadata(Filename, FileSize) ->
         {error, enoent} when FileSize =< ?FILE_HEADER_SIZE ->
             {ok, #meta{}};
         {error, Reason} ->
-            io:format("Failed to open metadata file: ~p. Reason = ~p~n",
+            kvs:info(?MODULE,"Failed to open metadata file: ~p. Reason = ~p~n",
                 [Filename, Reason]),
             {ok, #meta{}}
     end.
@@ -463,7 +451,7 @@ repair_file(File, Size) ->
             #rafter_entry{term=Term, index=Index} = binary_to_entry(Data),
             {ok, ConfigStart, Term, Index, TruncateAt};
         not_found ->
-            io:format("NOT FOUND: Size = ~p~n", [Size]),
+            kvs:info(?MODULE,"NOT FOUND: Size = ~p~n", [Size]),
             ok = truncate(File, 0),
             empty_file
     end.
@@ -503,7 +491,7 @@ find_magic_number(File, Loc) ->
     {Block, Start} = read_block(File, Loc),
     case find_last_magic_number_in_block(Block) of
         {ok, Offset} ->
-            io:format("Magic Number found at ~p~n", [Start+Offset]),
+            kvs:info(?MODULE,"Magic Number found at ~p~n", [Start+Offset]),
             {ok, Start+Offset};
         not_found ->
             case Start of

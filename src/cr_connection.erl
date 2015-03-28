@@ -16,7 +16,7 @@ start_connection(Module,Socket,Nodes) ->
     ChildSpec = { UniqueName, { cr_connection, start_link, [UniqueName,Module,Socket,Nodes]},
         Restart, Shutdown, worker, [Module] },
     Sup = supervisor:start_child(Module:sup(),ChildSpec),
-    io:format("SERVER: starting ~p listener: ~p~n",[Sup,{Module,IP,Port,Socket}]),
+    kvs:info("SERVER: starting ~p listener: ~p~n",[Sup,{Module,IP,Port,Socket}]),
     Sup.
 
 listen({socket_ready, Socket}, State) ->

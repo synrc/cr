@@ -16,7 +16,7 @@
 
 start_link({Index,Node}, Opts) ->
     Name = list_to_atom(lists:concat([Index,':',Node])),
-    io:format("RAFTER start_link ~p~n",[{Index,Node}]),
+    kvs:info(?MODULE,"RAFTER start_link ~p~n",[{Index,Node}]),
     gen_fsm:start_link({local,Node},?MODULE, [Node, Opts], []).
 
 raftname(Name) -> list_to_atom(lists:concat(["rafter:",Name])).
@@ -25,7 +25,7 @@ init([Me, #rafter_opts{state_machine=StateMachine,cluster=Nodes}]) ->
     Timer = gen_fsm:send_event_after(election_timeout(), timeout),
     #meta{voted_for=VotedFor, term=Term} = cr_log:get_metadata(Me),
     BackendState = StateMachine:init(Me),
-    io:format("RAFTER INIT Me: ~p~n",[Me]),
+    kvs:info(?MODULE,"RAFTER INIT Me: ~p~n",[Me]),
     State = #state{term=Term,
                    voted_for=VotedFor,
                    me=Me,
@@ -102,7 +102,7 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 
 %% Election timeout has expired. Go to candidate state iff we are a voter.
 follower(timeout, #state{config=Config, me=Me}=State0) ->
-    io:format("RAFTER FOLLOWER timeout~n"),
+    kvs:info(?MODULE,"RAFTER FOLLOWER timeout~n",[]),
     case cr_config:has_vote(Me, Config) of
         false ->
             State = reset_timer(election_timeout(), State0),
@@ -115,27 +115,27 @@ follower(timeout, #state{config=Config, me=Me}=State0) ->
 
 %% Ignore stale messages.
 follower(#vote{}, State) ->
-    io:format("RAFTER FOLLOWER #vote~n"),
+    kvs:info(?MODULE,"RAFTER FOLLOWER #vote~n",[]),
     {next_state, follower, State};
 follower(#append_entries_rpy{}, State) ->
     {next_state, follower, State}.
 
 %% Vote for this candidate
 follower(#request_vote{}=RequestVote, _From, State) ->
-    io:format("RAFTER FOLLOWER #req_vote~n"),
+    kvs:info(?MODULE,"RAFTER FOLLOWER #req_vote~n",[]),
     handle_request_vote(RequestVote, State);
 
 follower(#append_entries{term=Term}, _From,
          #state{term=CurrentTerm, me=Me}=State) when CurrentTerm > Term ->
     Rpy = #append_entries_rpy{from=Me, term=CurrentTerm, success=false},
-    io:format("RAFTER FOLLOWER #append Me: ~p success: false~n",[Me]),
+    kvs:info(?MODULE,"RAFTER FOLLOWER #append Me: ~p success: false~n",[Me]),
     {reply, Rpy, follower, State};
 
 follower(#append_entries{term=Term, from=From, prev_log_index=PrevLogIndex,
                          entries=Entries, commit_index=CommitIndex,
                          send_clock=Clock}=AppendEntries,
          _From, #state{me=Me}=State) ->
-    %io:format("RAFTER FOLLOWER #append Me: ~p~n",[Me]),
+    %kvs:info(?MODULE,"RAFTER FOLLOWER #append Me: ~p~n",[Me]),
     State2=set_term(Term, State),
     Rpy = #append_entries_rpy{send_clock=Clock,
                               term=Term,
@@ -161,7 +161,7 @@ follower(#append_entries{term=Term, from=From, prev_log_index=PrevLogIndex,
 %% entry in every log.
 follower({set_config, {Id, NewServers}}, From,
           #state{me=Me, followers=F, config=#config{state=blank}=C}=State) ->
-    io:format("RAFTER FOLLOWER set_config Me: ~p~n",[Me]),
+    kvs:info(?MODULE,"RAFTER FOLLOWER set_config Me: ~p~n",[Me]),
     case lists:member(Me, NewServers) of
         true ->
             {Followers, Config} = reconfig(Me, F, C, NewServers, State),
@@ -179,34 +179,34 @@ follower({set_config, {Id, NewServers}}, From,
     end;
 
 follower({set_config, _}, _From, #state{leader=undefined, me=Me, config=C}=State) ->
-    io:format("RAFTER FOLLOWER set_config ~p~n",[Me]),
+    kvs:info(?MODULE,"RAFTER FOLLOWER set_config ~p~n",[Me]),
     Error = no_leader_error(Me, C),
     {reply, {error, Error}, follower, State};
 
 follower({set_config, _}, _From, #state{leader=Leader}=State) ->
-    io:format("RAFTER FOLLOWER set_config ~p~n",[Leader]),
+    kvs:info(?MODULE,"RAFTER FOLLOWER set_config ~p~n",[Leader]),
     Reply = {error, {redirect, Leader}},
     {reply, Reply, follower, State};
 
 follower({read_op, _}, _From, #state{me=Me, config=Config,
                                            leader=undefined}=State) ->
-    io:format("RAFTER FOLLOWER read_op ~p~n",[Me]),
+    kvs:info(?MODULE,"RAFTER FOLLOWER read_op ~p~n",[Me]),
     Error = no_leader_error(Me, Config),
     {reply, {error, Error}, follower, State};
 
 follower({read_op, _}, _From, #state{leader=Leader}=State) ->
-    io:format("RAFTER FOLLOWER read_op~n"),
+    kvs:info(?MODULE,"RAFTER FOLLOWER read_op~n",[]),
     Reply = {error, {redirect, Leader}},
     {reply, Reply, follower, State};
 
 follower({op, _Command}, _From, #state{me=Me, config=Config,
                                        leader=undefined}=State) ->
-    io:format("RAFTER FOLLOWER read_op~n"),
+    kvs:info(?MODULE,"RAFTER FOLLOWER read_op~n",[]),
     Error = no_leader_error(Me, Config),
     {reply, {error, Error}, follower, State};
 
 follower({op, _Command}, _From, #state{leader=Leader}=State) ->
-    io:format("RAFTER FOLLOWER read_op~n"),
+    kvs:info(?MODULE,"RAFTER FOLLOWER read_op~n",[]),
     Reply = {error, {redirect, Leader}},
     {reply, Reply, follower, State}.
 
@@ -214,7 +214,7 @@ follower({op, _Command}, _From, #state{leader=Leader}=State) ->
 %% get a quorum for our votes, so just reply to the user here and keep trying
 %% until the other nodes come up.
 candidate(timeout, #state{term=1, init_config=[_Id, From]}=S) ->
-    io:format("RAFTER CANDIDATE timeout ~n"),
+    kvs:info(?MODULE,"RAFTER CANDIDATE timeout ~n",[]),
     State0 = reset_timer(election_timeout(), S),
     gen_fsm:reply(From, {error, peers_not_responding}),
     State = State0#state{init_config=no_client},
@@ -222,7 +222,7 @@ candidate(timeout, #state{term=1, init_config=[_Id, From]}=S) ->
 
 %% The election timeout has elapsed so start an election
 candidate(timeout, State) ->
-    io:format("RAFTER CANDIDATE timeout~n"),
+    kvs:info(?MODULE,"RAFTER CANDIDATE timeout~n",[]),
     NewState = become_candidate(State),
     {next_state, candidate, NewState};
 
@@ -238,7 +238,7 @@ candidate(timeout, State) ->
 candidate(#vote{term=VoteTerm, success=false},
           #state{term=Term, init_config=[_Id, From]}=State)
          when VoteTerm > Term ->
-    io:format("RAFTER CANDIDATE #vote~n"),
+    kvs:info(?MODULE,"RAFTER CANDIDATE #vote~n",[]),
     gen_fsm:reply(From, {error, invalid_initial_config}),
     State2 = State#state{init_config=undefined, config=#config{state=blank}},
     NewState = step_down(VoteTerm, State2),
@@ -247,26 +247,26 @@ candidate(#vote{term=VoteTerm, success=false},
 %% We are out of date. Go back to follower state.
 candidate(#vote{term=VoteTerm, success=false}, #state{term=Term}=State)
          when VoteTerm > Term ->
-    io:format("RAFTER CANDIDATE #vote~n"),
+    kvs:info(?MODULE,"RAFTER CANDIDATE #vote~n",[]),
     NewState = step_down(VoteTerm, State),
     {next_state, follower, NewState};
 
 %% This is a stale vote from an old request. Ignore it.
 candidate(#vote{term=VoteTerm}, #state{term=CurrentTerm}=State)
           when VoteTerm < CurrentTerm ->
-    io:format("RAFTER CANDIDATE #vote~n"),
+    kvs:info(?MODULE,"RAFTER CANDIDATE #vote~n",[]),
     {next_state, candidate, State};
 
 candidate(#vote{success=false, from=From}, #state{responses=Responses}=State) ->
     NewResponses = dict:store(From, false, Responses),
     NewState = State#state{responses=NewResponses},
-    io:format("RAFTER CANDIDATE #vote~n"),
+    kvs:info(?MODULE,"RAFTER CANDIDATE #vote~n",[]),
     {next_state, candidate, NewState};
 
 %% Sweet, someone likes us! Do we have enough votes to get elected?
 candidate(#vote{success=true, from=From}, #state{responses=Responses, me=Me,
                                                  config=Config}=State) ->
-    io:format("RAFTER CANDIDATE #vote~n"),
+    kvs:info(?MODULE,"RAFTER CANDIDATE #vote~n",[]),
     NewResponses = dict:store(From, true, Responses),
     case cr_config:quorum(Me, Config, NewResponses) of
         true ->
@@ -278,7 +278,7 @@ candidate(#vote{success=true, from=From}, #state{responses=Responses, me=Me,
     end.
 
 candidate({set_config, _}, _From, State) ->
-    io:format("RAFTER CANDIDATE set_config~n"),
+    kvs:info(?MODULE,"RAFTER CANDIDATE set_config~n",[]),
     Reply = {error, election_in_progress},
     {reply, Reply, follower, State};
 
@@ -287,11 +287,11 @@ candidate({set_config, _}, _From, State) ->
 candidate(#request_vote{term=RequestTerm}=RequestVote, _From,
           #state{term=Term}=State) when RequestTerm > Term ->
     NewState = step_down(RequestTerm, State),
-    io:format("RAFTER CANDIDATE #req_vote~n"),
+    kvs:info(?MODULE,"RAFTER CANDIDATE #req_vote~n",[]),
     handle_request_vote(RequestVote, NewState);
 candidate(#request_vote{}, _From, #state{term=CurrentTerm, me=Me}=State) ->
     Vote = #vote{term=CurrentTerm, success=false, from=Me},
-    io:format("RAFTER CANDIDATE #req_vote~n"),
+    kvs:info(?MODULE,"RAFTER CANDIDATE #req_vote~n",[]),
     {reply, Vote, candidate, State};
 
 %% Another peer is asserting itself as leader, and it must be correct because
