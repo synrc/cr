@@ -151,6 +151,9 @@ check_and_append(Peer, Entries, Index) ->
 kvs_log(Peer, #operation{}=Operation) ->
     gen_server:call(logname(Peer), {kvs_log, Operation}).
 
+kvs_replay(Peer, Operation, Storage, Status) ->
+    gen_server:call(logname(Peer), {kvs_replay, Operation, Storage, Status}).
+
 %% @doc append/2 gets called in the leader state only, and assumes a
 %% truncated log.
 append(Peer, Entries) ->
@@ -227,7 +230,12 @@ handle_call({append, Entries}, _From, #state{logfile=File}=State) ->
     {reply, {ok, Index}, NewState};
 
 handle_call({kvs_log, Operation}, _From, #state{logfile=File}=State) ->
-    {reply, kvs:add(Operation), State};
+    Id = kvs:next_id(operation,1),
+    {reply, kvs:add(Operation#operation{id=Id}), State};
+
+handle_call({kvs_replay, Operation, {state,Name,Nodes,Storage}, Status}, _From, #state{}=State) ->
+    Storage:dispatch(Operation#operation.body,{state,Name,Nodes,Storage}),
+    {reply, kvs:put(Operation#operation{status=Status}),State};
 
 handle_call(get_config, _From, #state{config=Config}=State) ->
     {reply, Config, State};

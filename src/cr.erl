@@ -1,6 +1,7 @@
 -module(cr).
 -copyright('Maxim Sokhatsky').
 -include("cr.hrl").
+-include_lib("db/include/transaction.hrl").
 -include("rafter.hrl").
 -compile(export_all).
 
@@ -35,11 +36,10 @@ tx(Record) when is_tuple(Record) ->
     Client = self(),
     {I,N}  = hd(Chain),
     Peer   = peer({I,N}),
-    io:format("TX Record: ~p~n"
-              "     Peer: ~p~n"
-              "    Chain: ~p~n",[Record,Peer,Chain]),
+    io:format("TX from: ~p to: ~p~n"
+              "  Chain: ~p~n",[node(),Peer,Chain]),
     Pid    = vpid(I,Peer),
-    gen_server:call(Pid,{pending,{prepare,Client,tl(Chain),Record}}).
+    gen_server:call(Pid,{pending,{prepare,Client,Chain,Record}}).
 
 stack(Error, Reason) ->
     Stacktrace = [case A of
@@ -56,3 +56,13 @@ error_page(Class,Error) ->
     [ io_lib:format("\t~w:~w/~w:~w\n",
         [ Module,Function,Arity,proplists:get_value(line, Location) ])
     ||  { Module,Function,Arity,Location} <- erlang:get_stacktrace() ].
+
+test() ->
+    Num = 10,
+    O1 = lists:foldl(fun({_,_,_,A,_,_},Acc) -> A+Acc end,0,kvs:all(log)),
+    T1 = length(kvs:all(transaction)),
+    [cr:tx(#transaction{id=kvs:next_id(transaction,1)})||I<-lists:seq(1,Num)],
+    O2 = lists:foldl(fun({_,_,_,A,_,_},Acc) -> A+Acc end,0,kvs:all(log)),
+    T2 = length(kvs:all(transaction)),
+    O2 = Num * 2 + O1,
+    Num = T2-T1.

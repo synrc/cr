@@ -3,16 +3,16 @@
 -include("cr.hrl").
 -compile(export_all).
 
-dispatch({commit,_,_,Tx})  ->
+dispatch({commit,_,_,Tx}, {state,Name,_,_})  ->
     io:format("KVS LINK~n"),
     kvs:link(Tx);
 
-dispatch({prepare,_,_,Tx})  ->
+dispatch({prepare,_,_,Tx}, {state,Name,_,_})  ->
     io:format("KVS CREATE~n"),
     kvs:put(Tx);
 
-dispatch({rollback,_,_,Tx})  ->
+dispatch({rollback,_,_,Tx}, {state,Name,_,_})  ->
     io:format("KVS CLEAN~n"),
     kvs:delete(Tx);
 
-dispatch(_)  -> ok.
+dispatch(_,_)  -> ok.
