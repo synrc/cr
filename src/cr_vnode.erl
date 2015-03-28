@@ -62,7 +62,7 @@ handle_cast({client,Client,Chain,Record}, #state{name=Name,storage=Storage}=Stat
     spawn(fun() ->
         {I,N}  = hd(Chain),
         gen_server:cast(
-            {cr:vpid({I,N}),cr:peer({I,N})},
+            cr:vpid({I,cr:peer({I,N})}),
             {pending,{prepare,Client,Chain,Record}}) end),
     {noreply, State};
 
