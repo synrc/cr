@@ -141,7 +141,7 @@ stop(Peer) ->
 check_and_append(Peer, Entries, Index) ->
     gen_server:call(logname(Peer), {check_and_append, Entries, Index}).
 
-kvs_log(Peer, #operation{}=Operation) ->
+kvs_log(Peer, Operation) ->
     gen_server:call(logname(Peer), {kvs_log, Operation}).
 
 kvs_replay(Peer, Operation, Storage, Status) ->
@@ -214,6 +214,12 @@ format_status(_, [_, State]) ->
     Data = lager:pr(State, ?MODULE),
     [{data, [{"StateData", Data}]}].
 
+info(#operation{body={Command,Sender,[H|T]=Chain,Tx}}) ->
+    Id = element(2,Tx),
+    case Id rem 1000 of
+                   0 -> kvs:info(?MODULE,"XA ~p Tx: ~p~n",[cr_vnode:code(Command),Id]);
+                   _ -> skip end.
+
 handle_call({append, Entries}, _From, #state{logfile=File}=State) ->
     NewState = write_entries(File, Entries, State),
     Index = NewState#state.index,
@@ -223,6 +229,7 @@ handle_call({kvs_log, Operation}, _From, #state{logfile=File}=State) ->
     {reply, kvs:add(Operation#operation{id=kvs:next_id(operation,1)}), State};
 
 handle_call({kvs_replay, Operation, {state,Name,Nodes,Storage}, Status}, _From, #state{}=State) ->
+    info(Operation),
     Storage:dispatch(Operation#operation.body,{state,Name,Nodes,Storage}),
     {reply, kvs:put(Operation#operation{status=Status}),State};
 

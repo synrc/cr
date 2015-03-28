@@ -24,8 +24,6 @@ handle_info(_Info, State) ->
     kvs:info(?MODULE,"VNODE: Info ~p~n",[_Info]),
     {noreply, State}.
 
-quorum(A) -> {ok,A}.
-
 kvs_replay(Operation, #state{storage=Storage}=State, Status) ->
     Storage:dispatch(Operation#operation.body,State),
     kvs:put(Operation#operation{status=Status}).
@@ -35,19 +33,17 @@ kvs_log({Cmd,Self,[{I,N}|T],Tx}=Message, #state{name=Name}=State) ->
     kvs:info(?MODULE,"XA RECEIVE: ~p~n",[{Id,Message,Name}]),
     Operation = #operation{name=Cmd,body=Message,feed_id=Name,status=pending},
     {ok,Saved} = kvs:add(Operation#operation{id=kvs:next_id(operation,1)}),
-    This  = self(),
-    spawn(fun() -> try gen_server:cast(This,Saved)
-                 catch E:R -> kvs:info(?MODULE,"LOG ERROR ~p~n",[cr:stack(E,R)]) end end).
+    try gen_server:cast(self(),Saved)
+    catch E:R -> kvs:info(?MODULE,"LOG ERROR ~p~n",[cr:stack(E,R)]) end.
 
 continuation(Next,{_,_,[],Tx}=Command,State) -> {noreply, State};
 continuation(Next,{C,S,[{I,N}|T],Tx}=Command,State) ->
     Id = element(2,Tx),
     Peer = cr:peer({I,N}),
     Vpid = cr:vpid({I,Peer}),
-    case gen_server:call(Vpid,{pending,Command}) of
-             {ok,Saved} -> kvs:info("XA SENT OK from ~p to ~p~n",[node(),Peer]), {noreply,State};
-         {error,Reason} -> kvs:info("XA SENDING ERROR: ~p~n",[Reason]),
-                           timer:sleep(1000),
+    case gen_server:cast(Vpid,{pending,Command}) of
+                     ok -> kvs:info("XA SENT OK from ~p to ~p~n",[node(),Peer]), {noreply,State};
+                  Error -> timer:sleep(1000),
                            continuation(Next,Command,State) end.
 
 handle_call({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, _, #state{name=Name,storage=Storage}=State) ->
@@ -59,59 +55,42 @@ handle_call(Request,_,Proc) ->
     {reply,ok,Proc}.
 
 handle_cast({client,Client,Chain,Record}, #state{name=Name,storage=Storage}=State) ->
-    spawn(fun() ->
-        {I,N}  = hd(Chain),
-        gen_server:cast(
-            cr:vpid({I,cr:peer({I,N})}),
-            {pending,{prepare,Client,Chain,Record}}) end),
+    {I,N} = hd(Chain),
+    Self  = node(),
+    gen_server:cast(case cr:peer({I,N}) of
+                         Self -> cr:local(Record);
+                         Node -> cr:vpid({I,Node}) end,
+                    {pending,{prepare,Client,Chain,Record}}),
     {noreply, State};
 
 handle_cast({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, #state{name=Name,storage=Storage}=State) ->
     kvs_log(Message,State),
     {noreply, State};
 
-handle_cast(#operation{name=prepare,body=Message}=Operation, #state{name=Name,storage=Storage}=State) ->
-    {prepare,Sender,[H|T]=Chain,Tx} = Message,
-    Id = element(2,Tx),
-    kvs:info(?MODULE,"XA PREPARE: ~p~n",[Id]),
-    Val = try cr_log:kvs_replay(node(),Operation, State, replayed)
-       catch E:R ->
-              kvs:info("PREPARE ~p ERROR ~p~n",[Storage,R]),
-              kvs:info("~p~n",[cr:stack(E,R)]),
-              {rollback, {E,R}, Chain, Tx} end,
-    Command = case [Chain,Val] of
-        [_,A={rollback,_,_,_}] -> A;
-                    [[Name],_] -> {commit,self(),cr:chain(Id),Tx};
-                     [[H|T],_] -> {prepare,self(),T,Tx} end,
-    spawn(fun() -> try continuation(H,Command,State)
-                 catch X:Y -> kvs:info(?MODULE,"PREPARE ASYNC ERROR ~p~n",[cr:stack(X,Y)]) end end),
-    {noreply,State};
-
-handle_cast(#operation{name=commit,body=Message}=Operation, #state{name=Name,storage=Storage}=State) ->
-    {commit,Sender,[H|T]=Chain,Tx} = Message,
-    Id = element(2,Tx),
-    kvs:info(?MODULE,"XA COMMIT: ~p~n",[Id]),
-    case Id rem 1000 of
-                   0 -> io:format("XA COMMIT ~p~n",[Id]);
-                   _ -> skip end,
-    Val = try cr_log:kvs_replay(node(), Operation, State, commited)
-       catch E:R -> kvs:info("COMMIT ~p ERROR ~p~n",[Storage,R]),
-                    kvs:info("~p~n",[cr:stack(E,R)]),
-                    {rollback,{E,R},Chain,Tx} end,
-    Command = case [Chain,Val] of
-        [_,A={rollback,_,_,_}] -> A;
-                    [[Name],_] -> {nop,self(),[],[]};
-                     [[H|T],_] -> {commit,self(),T,Tx} end,
-    spawn(fun() -> try continuation(H,Command,State)
-                 catch X:Y -> kvs:info("COMMIT ASYNC ERROR ~p~n",[cr:stack(X,Y)]) end end),
-    {noreply,State};
-
-handle_cast(#operation{name=rollback,body=Message}=Operation, #state{name=Name,storage=Storage}=State) ->
-    {rollback,{E,R},[H|T]=Chain,Tx}=Message,
-    Id = element(2,Tx),
-    kvs:info(?MODULE,"XA ROLLBACK: ~p~n"
-                      "Id: ~p~n",[{E,R},Id]),
-    {noreply, State}.
+handle_cast(#operation{name=Command,body=Message}=Operation, #state{name=Name,storage=Storage}=State) ->
+    {Command,Sender,[H|T]=Chain,Tx} = Message,
+    Replay =   try cr_log:kvs_replay(node(),Operation,State,status(Command))
+             catch E:R -> kvs:info(?MODULE,"~p REPLAY ~p~n",[code(Command),cr:stack(E,R)]),
+                          {rollback, {E,R}, Chain, Tx} end,
+    Forward = case [Chain,Replay] of
+           [_,A={rollback,_,_,_}] -> A;
+                       [[Name],_] -> last(Operation);
+                        [[H|T],_] -> {Command,self(),T,Tx} end,
+    try continuation(H,Forward,State)
+    catch X:Y -> kvs:info(?MODULE,"~p SEND ~p~n",[code(Command),cr:stack(X,Y)]) end,
+    {noreply,State}.
 
 terminate(_Reason, #state{}) -> ok.
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
+
+status(commit)   -> commited;
+status(prepare)  -> prepared;
+status(Unknown)  -> Unknown.
+
+last(#operation{body={prepare,_,_,Tx}}) -> {commit,self(),cr:chain(element(2,Tx)),Tx};
+last(#operation{body={commit,_,_,Tx}})  -> {nop,self(),[],[]}.
+
+code(prepare)    -> "PREPARE";
+code(commit)     -> "COMMIT";
+code(rollback)   -> "ROLLBACK";
+code(Unknown)    -> Unknown.
