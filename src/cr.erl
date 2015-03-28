@@ -45,7 +45,7 @@ tx(Record) when is_tuple(Record) ->
     kvs:info("TX from: ~p to: ~p~n"
              "  Chain: ~p~n",[node(),Peer,Chain]),
     Pid    = vpid(I,Peer),
-    gen_server:call(Pid,{pending,{prepare,Client,Chain,Record}}).
+    gen_server:cast(Pid,{pending,{prepare,Client,Chain,Record}}).
 
 stack(Error, Reason) ->
     Stacktrace = [case A of

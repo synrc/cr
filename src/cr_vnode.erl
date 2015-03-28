@@ -30,6 +30,15 @@ kvs_replay(Operation, #state{storage=Storage}=State, Status) ->
     Storage:dispatch(Operation#operation.body,State),
     kvs:put(Operation#operation{status=Status}).
 
+kvs_log({Cmd,Self,[{I,N}|T],Tx}=Message, #state{name=Name}=State) ->
+    Id = element(2,Tx),
+    kvs:info(?MODULE,"XA RECEIVE: ~p~n",[{Id,Message,Name}]),
+    Operation = #operation{name=Cmd,body=Message,feed_id=Name,status=pending},
+    {ok,Saved} = kvs:add(Operation#operation{id=kvs:next_id(operation,1)}),
+    This  = self(),
+    spawn(fun() -> try gen_server:cast(This,Saved)
+                 catch E:R -> kvs:info(?MODULE,"LOG ERROR ~p~n",[cr:stack(E,R)]) end end).
+
 continuation(Next,{_,_,[],Tx}=Command,State) -> {noreply, State};
 continuation(Next,{C,S,[{I,N}|T],Tx}=Command,State) ->
     Id = element(2,Tx),
@@ -42,24 +51,21 @@ continuation(Next,{C,S,[{I,N}|T],Tx}=Command,State) ->
                            continuation(Next,Command,State) end.
 
 handle_call({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, _, #state{name=Name,storage=Storage}=State) ->
-    Id = element(2,Tx),
-    kvs:info(?MODULE,"XA RECEIVE: ~p~n",[{Id,Message,Name}]),
-    Operation = #operation{name=Cmd,body=Message,feed_id=Name,status=pending},
-                  %cr_log:kvs_log(node(),Operation),
-    This  = self(),
-    spawn(fun() -> try gen_server:cast(This,Operation)
-                 catch E:R -> kvs:info(?MODULE,"PENDING ASYNC ERROR ~p~n",[cr:stack(E,R)]) end end),
+    kvs_log(Message,State),
     {reply, {ok,queued}, State};
 
 handle_call(Request,_,Proc) ->
     kvs:info(?MODULE,"VNODE: Call ~p~n",[Request]),
     {reply,ok,Proc}.
 
+handle_cast({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, #state{name=Name,storage=Storage}=State) ->
+    kvs_log(Message,State),
+    {noreply, State};
+
 handle_cast(#operation{name=prepare,body=Message}=Operation, #state{name=Name,storage=Storage}=State) ->
     {prepare,Sender,[H|T]=Chain,Tx} = Message,
     Id = element(2,Tx),
     kvs:info("XA PREPARE: ~p~n",[Id]),
-    kvs:add(Operation#operation{id=kvs:next_id(operation,1)}),
     Val = try kvs_replay(Operation, State, replayed)
        catch E:R ->
               kvs:info("PREPARE ~p ERROR ~p~n",[Storage,R]),
