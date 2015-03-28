@@ -21,7 +21,7 @@ handle_info({'EXIT', Pid,_}, #state{} = State) ->
     {noreply, State};
 
 handle_info(_Info, State) ->
-    error_logger:info_msg("VNODE: Info ~p~n",[_Info]),
+    kvs:info(?MODULE,"VNODE: Info ~p~n",[_Info]),
     {noreply, State}.
 
 quorum(A) -> {ok,A}.
@@ -73,8 +73,8 @@ handle_cast({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, #state{name=Name,storage=
 handle_cast(#operation{name=prepare,body=Message}=Operation, #state{name=Name,storage=Storage}=State) ->
     {prepare,Sender,[H|T]=Chain,Tx} = Message,
     Id = element(2,Tx),
-    kvs:info("XA PREPARE: ~p~n",[Id]),
-    Val = try kvs_replay(Operation, State, replayed)
+    kvs:info(?MODULE,"XA PREPARE: ~p~n",[Id]),
+    Val = try cr_log:kvs_replay(node(),Operation, State, replayed)
        catch E:R ->
               kvs:info("PREPARE ~p ERROR ~p~n",[Storage,R]),
               kvs:info("~p~n",[cr:stack(E,R)]),
@@ -90,8 +90,11 @@ handle_cast(#operation{name=prepare,body=Message}=Operation, #state{name=Name,st
 handle_cast(#operation{name=commit,body=Message}=Operation, #state{name=Name,storage=Storage}=State) ->
     {commit,Sender,[H|T]=Chain,Tx} = Message,
     Id = element(2,Tx),
-    kvs:info("XA COMMIT: ~p~n",[Id]),
-    Val = try kvs_replay(Operation, State, commited)
+    kvs:info(?MODULE,"XA COMMIT: ~p~n",[Id]),
+    case Id rem 1000 of
+                   0 -> io:format("XA COMMIT ~p~n",[Id]);
+                   _ -> skip end,
+    Val = try cr_log:kvs_replay(node(), Operation, State, commited)
        catch E:R -> kvs:info("COMMIT ~p ERROR ~p~n",[Storage,R]),
                     kvs:info("~p~n",[cr:stack(E,R)]),
                     {rollback,{E,R},Chain,Tx} end,
@@ -106,7 +109,7 @@ handle_cast(#operation{name=commit,body=Message}=Operation, #state{name=Name,sto
 handle_cast(#operation{name=rollback,body=Message}=Operation, #state{name=Name,storage=Storage}=State) ->
     {rollback,{E,R},[H|T]=Chain,Tx}=Message,
     Id = element(2,Tx),
-    kvs:info("XA ROLLBACK: ~p~n"
+    kvs:info(?MODULE,"XA ROLLBACK: ~p~n"
                       "Id: ~p~n",[{E,R},Id]),
     {noreply, State}.
 
