@@ -43,8 +43,9 @@ handle_call({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, _, #state{name=Name,stora
     io:format("XA RECEIVE: ~p~n",[{Id,Message,Name}]),
     Operation = #operation{name=Cmd,body=Message,feed_id=Name,status=pending},
     {ok,Saved} = cr_log:kvs_log(node(),Operation),
-    This = self(), spawn(fun() -> try gen_server:cast(This,Saved)
-                               catch E:R -> io:format("PENDING ASYNC ERROR ~p~n",[cr:stack(E,R)]) end end),
+    This = self(),
+    spawn(fun() -> try gen_server:cast(This,Saved)
+          catch E:R -> io:format("PENDING ASYNC ERROR ~p~n",[cr:stack(E,R)]) end end),
     {reply, {ok,Saved}, State};
 
 handle_call(Request,_,Proc) ->
@@ -93,4 +94,3 @@ handle_cast(#operation{name=rollback,body=Message}=Operation, #state{name=Name,s
 
 terminate(_Reason, #state{}) -> ok.
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
-
