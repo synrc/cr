@@ -61,7 +61,7 @@ handle_cast({prepare,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=St
        catch E:R ->
               io:format("PREPARE ~p ERROR ~p~n",[Storage,R]),
               io:format("~p~n",[cr:stack(E,R)]),
-              {rollback, Sender, Chain, Tx} end,
+              {rollback, {E,R}, Chain, Tx} end,
     Command = case [Chain,Val] of
         [_,A={rollback,_,_,_}] -> A;
                     [[Name],_] -> {commit,self(),cr:chain(Id),Tx};
@@ -76,12 +76,18 @@ handle_cast({commit,Sender,[H|T]=Chain,Tx}=Message, #state{name=Name,storage=Sto
               kvs:put(Op#operation{status=commited})
        catch E:R -> io:format("COMMIT ~p ERROR ~p~n",[Storage,R]),
                     io:format("~p~n",[cr:stack(E,R)]),
-                    {rollback,Sender,Chain,Tx} end,
+                    {rollback,{E,R},Chain,Tx} end,
     Command = case [Chain,Val] of
         [_,A={rollback,_,_,_}] -> A;
                     [[Name],_] -> {nop,self(),[],[]};
                      [[H|T],_] -> {commit,self(),T,Tx} end,
-    continuation(H,Command,State).
+    continuation(H,Command,State);
+
+handle_cast({rollback,{E,R},[H|T]=Chain,Tx}=Message, #state{name=Name,storage=Storage}=State) ->
+    Id = element(2,Tx),
+    io:format("XA ROLLBACK: ~p~n"
+                       "Id: ~p~n",[{E,R},Id]),
+    {noreply, State}.
 
 terminate(_Reason, #state{}) -> ok.
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
