@@ -42,7 +42,7 @@ continuation(Next,{C,S,[{I,N}|T],Tx}=Command,State) ->
 handle_call({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, _, #state{name=Name,storage=Storage}=State) ->
     Id = element(2,Tx),
     io:format("XA QUEUE: ~p~n",[{Id,Message,Name}]),
-    Operation = #operation{id = kvs:next_id(operation,1),
+    Operation = #operation{id = Id,
                            body = Message,feed_id=Name,status=pending},
     Res  = cr_log:kvs_log(node(),Operation),
     This = self(), spawn(fun() -> gen_server:cast(This,Message) end),
