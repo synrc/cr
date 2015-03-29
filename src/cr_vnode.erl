@@ -75,7 +75,7 @@ handle_cast(#operation{name=Command,body=Message}=Operation, #state{name=Name,st
     Forward = case [Chain,Replay] of
            [_,A={rollback,_,_,_}] -> A;
                        [[Name],_] -> last(Operation);
-                        [[H|T],_] -> {Command,self(),T,Tx} end,
+                        [[H|T],_] -> {Command,Sender,T,Tx} end,
     try continuation(H,Forward,State)
     catch X:Y -> kvs:info(?MODULE,"~p SEND ~p~n",[code(Command),cr:stack(X,Y)]) end,
     {noreply,State}.
@@ -89,7 +89,12 @@ status(Unknown)  -> Unknown.
 
 %last(#operation{body={prepare,_,_,Tx}}) -> {commit,self(),cr:chain(element(2,Tx)),Tx};
 %last(#operation{body={commit,_,_,Tx}})  -> {nop,self(),[],[]}.
-last(#operation{body={_,_,_,Tx}})  -> {nop,self(),[],[]}.
+last(#operation{body={_,{Sender,Time},_,Tx}})  ->
+    case Tx#transaction.id of
+         X when is_integer(X) andalso X rem 1000 == 0 ->
+                io:format("Latency of Tx #~p: ~p~n",[X,calendar:time_difference(Time,calendar:local_time())]);
+         _ -> skip end,
+    {nop,Sender,[],[]}.
 
 code(prepare)    -> "PREPARE";
 code(commit)     -> "COMMIT";

@@ -37,7 +37,7 @@ chain(Object) ->
               cr:roll(element(2,cr:hash(Object)))).
 
 tx(Record) when is_tuple(Record) ->
-    gen_server:cast(local(Record),{client,self(),chain(element(2,Record)),Record}).
+    gen_server:cast(local(Record),{client,{self(),calendar:local_time()},chain(element(2,Record)),Record}).
 
 stack(Error, Reason) ->
     Stacktrace = [case A of
