@@ -67,3 +67,47 @@ test(Num) ->
     O2 = lists:foldl(fun({_,_,_,A,_,_},Acc) -> A+Acc end,0,kvs:all(log)),
     T2 = length(kvs:all(transaction)),
     kvs:info(?MODULE,"Ops after: ~p~n",[O2]).
+
+log_size({I,N}) ->
+    {ok,Log} = kvs:get(log,{I,N}),
+    {Log#log.top,length(kvs:entries({ok,Log},operation,-1))}.
+
+dump() ->
+     {N,Nodes} = cr:ring(),
+     io:format("~64w ~3w ~2w ~10w ~14w~n",[vnode,i,n,top,length]),
+   [ begin
+     {A,B} = rpc(rpc:call(cr:peer({I,N}),cr,log_size,[{I,N}])),
+     io:format("~64w ~3w ~2w ~10w ~14w~n",[I,P,N,A,B])
+     end || {{I,N},P} <- lists:zip(lists:keydelete(0,1,Nodes),lists:seq(1,length(Nodes)-1))],
+     ok.
+
+string(O) ->
+    lists:concat(lists:flatten([lists:map(fun(undefined) -> ''; (X) -> [X,':'] end, tuple_to_list(O))])).
+
+dump(N) when N < 100 -> {_,X}   = cr:ring(),
+                        Nodes   = lists:keydelete(0,1,X),
+                        {I,P}   = lists:nth(N,Nodes),
+                        Pos     = string:str(Nodes,[{I,P}]),
+                        dump_op(Pos,kvs:entries(kvs:get(log,{I,P}),operation,10));
+dump(N)              -> {_,X}   = cr:ring(),
+                        Nodes   = lists:keydelete(0,1,X),
+                        {ok,Oo} = kvs:get(operation,N),
+                        {I,P}   = lists:keyfind(element(1,Oo#operation.feed_id),1,Nodes),
+                        Pos     = string:str(Nodes,[{I,P}]),
+                        dump_op(Pos,kvs:traversal(operation,Oo#operation.id,10,#iterator.prev)).
+
+dump_op(Pos,List) ->
+     io:format("~40w ~10w ~10w ~4w ~10w~n",[operation,id,prev,i,size]),
+   [ io:format("~40s ~10w ~10w ~4w ~10w~n",[
+        string(Tx),
+        element(2,O),
+        rpc(element(#iterator.prev,O)),
+        rpc(Pos),
+        size(term_to_binary(O))])
+     || #operation{name=Name,body={Cmd,_,Chain,Tx}}=O <- List],
+     ok.
+
+
+rpc(undefined) -> [];
+rpc({badrpc,_}) -> {error,error};
+rpc(Value) -> Value.

@@ -215,10 +215,10 @@ format_status(_, [_, State]) ->
     [{data, [{"StateData", Data}]}].
 
 info(#operation{body={Command,Sender,[H|T]=Chain,Tx}}) ->
-    Id = element(2,Tx),
-    case Id rem 1000 of
-                   0 -> kvs:info(?MODULE,"XA ~p Tx: ~p~n",[cr_vnode:code(Command),Id]);
-                   _ -> skip end.
+    Id = element(2,Tx).
+%    case Id rem 1000 of
+%                   0 -> kvs:info(?MODULE,"XA ~p Tx: ~p~n",[cr_vnode:code(Command),Id]);
+%                   _ -> skip end.
 
 handle_call({append, Entries}, _From, #state{logfile=File}=State) ->
     NewState = write_entries(File, Entries, State),
