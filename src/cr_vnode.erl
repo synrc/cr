@@ -87,8 +87,9 @@ status(commit)   -> commited;
 status(prepare)  -> prepared;
 status(Unknown)  -> Unknown.
 
-last(#operation{body={prepare,_,_,Tx}}) -> {commit,self(),cr:chain(element(2,Tx)),Tx};
-last(#operation{body={commit,_,_,Tx}})  -> {nop,self(),[],[]}.
+%last(#operation{body={prepare,_,_,Tx}}) -> {commit,self(),cr:chain(element(2,Tx)),Tx};
+%last(#operation{body={commit,_,_,Tx}})  -> {nop,self(),[],[]}.
+last(#operation{body={_,_,_,Tx}})  -> {nop,self(),[],[]}.
 
 code(prepare)    -> "PREPARE";
 code(commit)     -> "COMMIT";
