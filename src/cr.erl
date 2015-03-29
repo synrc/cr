@@ -74,7 +74,7 @@ log_size({I,N}) ->
 
 dump() ->
      {N,Nodes} = cr:ring(),
-     io:format("~64w ~3w ~2w ~10w ~14w~n",[vnode,i,n,top,length]),
+     io:format("~64w ~3w ~2w ~10w ~14w~n",[vnode,i,n,top,log]),
    [ begin
      {A,B} = rpc(rpc:call(cr:peer({I,N}),cr,log_size,[{I,N}])),
      io:format("~64w ~3w ~2w ~10w ~14w~n",[I,P,N,A,B])
@@ -84,11 +84,13 @@ dump() ->
 string(O) ->
     lists:concat(lists:flatten([lists:map(fun(undefined) -> ''; (X) -> [X,':'] end, tuple_to_list(O))])).
 
-dump(N) when N < 100 -> {_,X}   = cr:ring(),
+dump(N) when N < 13  -> {_,X}   = cr:ring(),
                         Nodes   = lists:keydelete(0,1,X),
                         {I,P}   = lists:nth(N,Nodes),
                         Pos     = string:str(Nodes,[{I,P}]),
-                        dump_op(Pos,kvs:entries(kvs:get(log,{I,P}),operation,10));
+                        {ok,C}  = rpc:call(cr:peer({I,P}),kvs,get,[log,{I,P}]),
+                        dump_op(Pos,rpc(rpc:call(cr:peer({I,P}),kvs,entries,[C,operation,10])));
+
 dump(N)              -> {_,X}   = cr:ring(),
                         Nodes   = lists:keydelete(0,1,X),
                         {ok,Oo} = kvs:get(operation,N),
@@ -111,3 +113,5 @@ dump_op(Pos,List) ->
 rpc(undefined) -> [];
 rpc({badrpc,_}) -> {error,error};
 rpc(Value) -> Value.
+
+clean() -> kvs:destroy(), kvs:join().
