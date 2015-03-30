@@ -100,8 +100,8 @@ dump(N)              -> {_,X}   = cr:ring(),
                         dump_op(Pos,kvs:traversal(operation,Oo#operation.id,10,#iterator.prev)).
 
 dump_op(Pos,List) ->
-     io:format("~55w ~10w ~10w ~4w ~10w~n",[operation,id,prev,i,size]),
-   [ io:format("~55w ~10w ~10w ~4w ~10w~n",[
+     io:format("~50s ~10w ~10w ~4w ~10w~n",[operation,id,prev,i,size]),
+   [ io:format("~50s ~10w ~10w ~4w ~10w~n",[
         string(Tx),
         element(2,O),
         rpc(element(#iterator.prev,O)),

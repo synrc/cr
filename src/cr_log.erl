@@ -224,7 +224,7 @@ handle_call({kvs_log, Operation}, _From, #state{logfile=File}=State) ->
 
 handle_call({kvs_replay, Operation, {state,Name,Nodes,Storage,L}, Status}, _From, #state{}=State) ->
     Storage:dispatch(Operation#operation.body,{state,Name,Nodes,Storage,L}),
-    {reply, kvs:put(Operation#operation{status=Status}),State};
+    {reply, ok, State};
 
 handle_call(get_config, _From, #state{config=Config}=State) ->
     {reply, Config, State};

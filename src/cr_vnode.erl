@@ -28,7 +28,8 @@ kvs_log({Cmd,Self,[{I,N}|T],Tx}=Message, #state{name=Name}=State) ->
     Id = element(2,Tx),
     kvs:info(?MODULE,"XA RECEIVE: ~p~n",[{Id,Message,Name}]),
     Operation = #operation{name=Cmd,body=Message,feed_id=Name,status=pending},
-    {ok,Saved} = kvs:add(Operation#operation{id=kvs:next_id(operation,1)}),
+    {ok,Saved} = %kvs:add(Operation#operation{id=kvs:next_id(operation,1)}),
+                 cr_log:kvs_log(node(),Operation),
     try gen_server:cast(self(),Saved)
     catch E:R -> kvs:info(?MODULE,"LOG ERROR ~p~n",[cr:stack(E,R)]) end.
 
