@@ -37,7 +37,10 @@ chain(Object) ->
               cr:roll(element(2,cr:hash(Object)))).
 
 tx(Record) when is_tuple(Record) ->
-    gen_server:cast(local(Record),{client,{self(),calendar:local_time()},chain(element(2,Record)),Record}).
+    gen_server:cast(local(Record),
+        {client,{self(),os:timestamp()},
+                chain(element(2,Record)),
+                Record}).
 
 stack(Error, Reason) ->
     Stacktrace = [case A of
@@ -70,10 +73,12 @@ log_size({I,N}) ->
 
 dump() ->
      {N,Nodes} = cr:ring(),
-     io:format("~64w ~3w ~2w ~10w ~14w~n",[vnode,i,n,top,log]),
+     io:format("~52w ~3w ~2w ~10w ~8w ~14w~n",[vnode,i,n,top,log,latency]),
    [ begin
      {A,B} = rpc(rpc:call(cr:peer({I,N}),cr,log_size,[{I,N}])),
-     io:format("~64w ~3w ~2w ~10w ~14w~n",[I,P,N,A,B])
+     {Min,Max,Avg} = latency({I,N}),
+     L = lists:concat([Min,'/',Max,'/',Avg]),
+     io:format("~52w ~3w ~2w ~10w ~8w ~14s~n",[I,P,N,A,B,L])
      end || {{I,N},P} <- lists:zip(lists:keydelete(0,1,Nodes),lists:seq(1,length(Nodes)-1))],
      ok.
 
@@ -95,8 +100,8 @@ dump(N)              -> {_,X}   = cr:ring(),
                         dump_op(Pos,kvs:traversal(operation,Oo#operation.id,10,#iterator.prev)).
 
 dump_op(Pos,List) ->
-     io:format("~40w ~10w ~10w ~4w ~10w~n",[operation,id,prev,i,size]),
-   [ io:format("~40s ~10w ~10w ~4w ~10w~n",[
+     io:format("~55w ~10w ~10w ~4w ~10w~n",[operation,id,prev,i,size]),
+   [ io:format("~55w ~10w ~10w ~4w ~10w~n",[
         string(Tx),
         element(2,O),
         rpc(element(#iterator.prev,O)),
@@ -104,6 +109,8 @@ dump_op(Pos,List) ->
         size(term_to_binary(O))])
      || #operation{name=Name,body={Cmd,_,Chain,Tx}}=O <- List],
      ok.
+
+latency({I,N}) -> gen_server:call(cr:vpid({I,cr:peer({I,N})}),{latency}).
 
 rpc(undefined) -> [];
 rpc({badrpc,_}) -> {error,error};

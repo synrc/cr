@@ -214,12 +214,6 @@ format_status(_, [_, State]) ->
     Data = lager:pr(State, ?MODULE),
     [{data, [{"StateData", Data}]}].
 
-info(#operation{body={Command,Sender,[H|T]=Chain,Tx}}) ->
-    Id = element(2,Tx).
-%    case Id rem 1000 of
-%                   0 -> kvs:info(?MODULE,"XA ~p Tx: ~p~n",[cr_vnode:code(Command),Id]);
-%                   _ -> skip end.
-
 handle_call({append, Entries}, _From, #state{logfile=File}=State) ->
     NewState = write_entries(File, Entries, State),
     Index = NewState#state.index,
@@ -228,9 +222,8 @@ handle_call({append, Entries}, _From, #state{logfile=File}=State) ->
 handle_call({kvs_log, Operation}, _From, #state{logfile=File}=State) ->
     {reply, kvs:add(Operation#operation{id=kvs:next_id(operation,1)}), State};
 
-handle_call({kvs_replay, Operation, {state,Name,Nodes,Storage}, Status}, _From, #state{}=State) ->
-    info(Operation),
-    Storage:dispatch(Operation#operation.body,{state,Name,Nodes,Storage}),
+handle_call({kvs_replay, Operation, {state,Name,Nodes,Storage,L}, Status}, _From, #state{}=State) ->
+    Storage:dispatch(Operation#operation.body,{state,Name,Nodes,Storage,L}),
     {reply, kvs:put(Operation#operation{status=Status}),State};
 
 handle_call(get_config, _From, #state{config=Config}=State) ->

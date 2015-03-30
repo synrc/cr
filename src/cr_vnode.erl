@@ -5,7 +5,7 @@
 -include_lib("kvs/include/kvs.hrl").
 -include_lib("db/include/transaction.hrl").
 -compile(export_all).
--record(state, {name,nodes,storage}).
+-record(state, {name,nodes,storage,latency={inf,0,0,0}}). % latency {min,max,avg}
 -export(?GEN_SERVER).
 
 start_link(Name,Storage) ->
@@ -23,10 +23,6 @@ handle_info({'EXIT', Pid,_}, #state{} = State) ->
 handle_info(_Info, State) ->
     kvs:info(?MODULE,"VNODE: Info ~p~n",[_Info]),
     {noreply, State}.
-
-kvs_replay(Operation, #state{storage=Storage}=State, Status) ->
-    Storage:dispatch(Operation#operation.body,State),
-    kvs:put(Operation#operation{status=Status}).
 
 kvs_log({Cmd,Self,[{I,N}|T],Tx}=Message, #state{name=Name}=State) ->
     Id = element(2,Tx),
@@ -50,6 +46,11 @@ handle_call({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, _, #state{name=Name,stora
     kvs_log(Message,State),
     {reply, {ok,queued}, State};
 
+handle_call({latency},_,#state{latency={Min,Max,Avg,N}}=State) ->
+    L = try X = {Min div 1000,Max div 1000,Avg div (N*1000)}
+      catch _:_ -> {Min,Max,Avg} end,
+    {reply,L,State};
+
 handle_call(Request,_,Proc) ->
     kvs:info(?MODULE,"VNODE: Call ~p~n",[Request]),
     {reply,ok,Proc}.
@@ -72,13 +73,13 @@ handle_cast(#operation{name=Command,body=Message}=Operation, #state{name=Name,st
     Replay =   try cr_log:kvs_replay(node(),Operation,State,status(Command))
              catch E:R -> kvs:info(?MODULE,"~p REPLAY ~p~n",[code(Command),cr:stack(E,R)]),
                           {rollback, {E,R}, Chain, Tx} end,
-    Forward = case [Chain,Replay] of
-           [_,A={rollback,_,_,_}] -> A;
-                       [[Name],_] -> last(Operation);
-                        [[H|T],_] -> {Command,Sender,T,Tx} end,
+    {Forward,Latency} = case [Chain,Replay] of
+           [_,A={rollback,_,_,_}] -> {A,State#state.latency};
+                       [[Name],_] -> last(Operation,State);
+                        [[H|T],_] -> {{Command,Sender,T,Tx},State#state.latency} end,
     try continuation(H,Forward,State)
     catch X:Y -> kvs:info(?MODULE,"~p SEND ~p~n",[code(Command),cr:stack(X,Y)]) end,
-    {noreply,State}.
+    {noreply,State#state{latency=Latency}}.
 
 terminate(_Reason, #state{}) -> ok.
 code_change(_OldVsn, State, _Extra) -> {ok, State}.
@@ -87,14 +88,25 @@ status(commit)   -> commited;
 status(prepare)  -> prepared;
 status(Unknown)  -> Unknown.
 
-%last(#operation{body={prepare,_,_,Tx}}) -> {commit,self(),cr:chain(element(2,Tx)),Tx};
-%last(#operation{body={commit,_,_,Tx}})  -> {nop,self(),[],[]}.
-last(#operation{body={_,{Sender,Time},_,Tx}})  ->
-    case Tx#transaction.id of
-         X when is_integer(X) andalso X rem 1000 == 0 ->
-                io:format("Latency of Tx #~p: ~p~n",[X,calendar:time_difference(Time,calendar:local_time())]);
-         _ -> skip end,
-    {nop,Sender,[],[]}.
+% XA PROTOCOL
+% last(#operation{body={prepare,{Sender,Time},_,Tx}},S) -> {{commit,{Sender,Time},cr:chain(element(2,Tx)),Tx},S#state.latency};
+% last(#operation{body={commit,{Sender,Time},_,Tx}},S)  -> {{nop,{Sender,Time},[],[]},new_latency(Time,S)};
+
+% CR PROTOCOL
+last(#operation{body={_,{Sender,Time},_,Tx}},S)       -> {{nop,{Sender,Time},[],[]},new_latency(Time,S)}.
+
+new_latency(Time,#state{latency=Latency}) ->
+    {Min,Max,Avg,N} = Latency,
+    L = time_diff(Time,os:timestamp()),
+    {NMin,NMax} = case L of
+         L when L > Max -> {Min,L};
+         L when L < Min -> {L,Max};
+                      _ -> {Min,Max} end,
+    NAvg = Avg + L,
+    {NMin,NMax,NAvg,N + 1}.
+
+ms({Mega,Sec,Micro}) -> (Mega*1000000+Sec)*1000000+Micro.
+time_diff(Now,Now2) -> ms(Now2) - ms(Now).
 
 code(prepare)    -> "PREPARE";
 code(commit)     -> "COMMIT";
