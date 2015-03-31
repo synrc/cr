@@ -4,10 +4,11 @@ else
     SEPARATOR=:
 endif
 
+MAD      := ./mad
 VM       := vm.args
 SYS      := sys.config
 PLT_NAME := ~/.n2o_dialyzer.plt
-ERL_ARGS := -args_file $(VM) -config $(SYS)
+ERL_ARGS := -args_file $(VM) -config $(SYS) -setcookie $(COOKIE) -name $(NAME)@127.0.0.1
 RUN_DIR  := apps/deposits/priv/static/log
 LOG_DIR  := apps/deposits/priv/static/log/log
 empty    :=
@@ -24,18 +25,18 @@ relx     := "{release,{$(RELEASE),\"$(VER)\"},[$(RELEASE)]}.\\n{include_erts,tru
 test: eunit ct
 deps up:
 	mkdir -p data
-	mad $@
+	$(MAD) $@
 compile: deps
-	mad compile skip_deps=true
+	$(MAD) compile skip_deps=true
 clean:
 	rm -f .applist
-	mad $@
+	$(MAD) $@
 .applist: compile
-	mad plan
+	$(MAD) plan
 $(RUN_DIR) $(LOG_DIR):
 	mkdir -p $(RUN_DIR) & mkdir -p $(LOG_DIR)
 console: .applist
-	ERL_LIBS="$(ERL_LIBS)" erl +pc unicode $(ERL_ARGS) -eval '[application:start(A) || A <- $(shell cat .applist)]'
+	ERL_LIBS="$(ERL_LIBS)" erl $(ERL_ARGS) -eval '[application:start(A) || A <- $(shell cat .applist)]'
 start: $(RUN_DIR) $(LOG_DIR) .applist
 	RUN_ERL_LOG_GENERATIONS=1000 RUN_ERL_LOG_MAXSIZE=20000000 \
 	ERL_LIBS=$(ERL_LIBS) run_erl -daemon $(RUN_DIR)/ $(LOG_DIR)/ "exec $(MAKE) console"

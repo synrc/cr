@@ -22,8 +22,10 @@ and track the transactions history log up to merging and cut-offs.
 Launch
 ------
 
-```
-    $ make console
+```bash
+make console NAME=cr
+make console NAME=cr2
+make console NAME=cr3
 ```
 
 Features
