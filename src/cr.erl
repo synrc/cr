@@ -22,7 +22,7 @@ peers(N)       -> lists:zip(lists:seq(1,N),lists:seq(1,N)).
 hash(Object)   -> hd(seq(Object)).
 rep(Object)    -> roll(element(2,hash(Object))).
 roll(N)        -> lists:seq(N,length(peers())) ++ lists:seq(1,N-1).
-seq(Object)    -> lists:keydelete(0,1,cr_hash:successors(cr_hash:key_of(Object),ring())).
+seq(Object)    -> lists:keydelete(0,1,cr_hash:succ(cr_hash:key_of(Object),ring())).
 peer({I,N})    -> element(1,lists:nth(N,peers())).
 nodex(Node)    -> string:str(cr:peers(),[lists:keyfind(Node,1,cr:peers())]).
 vpid({I,Node}) -> {I,P,_,_}=lists:keyfind(I,1,supervisor:which_children({vnode_sup,Node})), P.
