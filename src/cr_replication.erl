@@ -7,11 +7,12 @@
 % Issue commands only if you want them to be saved in cluster status log.
 
 init(Peer) ->
-    io:format("RAFTER BACK INIT ~p~n",[Peer]),
     State = #state{peer=Peer},
     NewState = stop(State),
     _Tid1 = ets:new(rafter, [set, named_table, public]),
     _Tid2 = ets:new(rafter_tables, [set, named_table, public]),
+    io:format("RAFTER BACK INIT ~p~n~p~n",[Peer,{_Tid1,_Tid2}]),
+    
     NewState.
 
 stop(State) ->

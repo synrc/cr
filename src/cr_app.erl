@@ -25,13 +25,14 @@ rafter({I,N},Nodes)      -> {N,{cr_rafter,start_link,
 
 init([Nodes,Opts]) ->
     {ok, {{one_for_one, 5, 60},
-              lists:flatten([ protocol(O,Nodes) || O<-Opts ]
-                         ++ [ pool(vnode_sup) ]
-                         ++ [ log({0,N},Nodes)    || {N,_,_,_} <- Nodes, N == node()]
-                         ++ [ rafter({0,N},Nodes) || {N,_,_,_} <- Nodes, N == node()]) }}.
+              lists:flatten([ log({0,N},Nodes)    || {N,_,_,_} <- Nodes, N == node()]
+                         ++ [ rafter({0,N},Nodes) || {N,_,_,_} <- Nodes, N == node()]
+                         ++ [ protocol(O,Nodes) || O<-Opts ]
+                         ++ [ pool(vnode_sup) ]) }}.
 
 stop(_)    -> ok.
 start(_,_) ->
+    io:format("Node: ~p~n",[node()]),
     {ok,Peers}=application:get_env(cr,peers),
     {N,P1,P2,P3}=lists:keyfind(node(),1,Peers),
     {_,VNodes} = cr:ring(),

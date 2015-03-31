@@ -9,10 +9,10 @@
 -compile(export_all).
 -export([follower/2, follower/3, candidate/2, candidate/3, leader/2, leader/3]).
 
--define(CLIENT_TIMEOUT, 2000).
+-define(CLIENT_TIMEOUT,       2000).
 -define(ELECTION_TIMEOUT_MIN, 500).
 -define(ELECTION_TIMEOUT_MAX, 1000).
--define(HEARTBEAT_TIMEOUT, 25).
+-define(HEARTBEAT_TIMEOUT,    100).
 
 start_link({Index,Node}, Opts) ->
     Name = list_to_atom(lists:concat([Index,':',Node])),
@@ -135,7 +135,7 @@ follower(#append_entries{term=Term, from=From, prev_log_index=PrevLogIndex,
                          entries=Entries, commit_index=CommitIndex,
                          send_clock=Clock}=AppendEntries,
          _From, #state{me=Me}=State) ->
-    %kvs:info(?MODULE,"RAFTER FOLLOWER #append Me: ~p~n",[Me]),
+    kvs:info(?MODULE,"RAFTER FOLLOWER #append Me: ~p~n",[Me]),
     State2=set_term(Term, State),
     Rpy = #append_entries_rpy{send_clock=Clock,
                               term=Term,
@@ -871,12 +871,9 @@ consistency_check(#append_entries{prev_log_index=Index,
             false
     end.
 
-set_term(Term, #state{term=CurrentTerm}=State) when Term < CurrentTerm ->
-    State;
-set_term(Term, #state{term=CurrentTerm}=State) when Term > CurrentTerm ->
-    set_metadata(undefined, State#state{term=Term});
-set_term(Term, #state{term=Term}=State) ->
-    State.
+set_term(Term, #state{term=CurrentTerm}=State) when Term < CurrentTerm -> State;
+set_term(Term, #state{term=CurrentTerm}=State) when Term > CurrentTerm -> set_metadata(undefined, State#state{term=Term});
+set_term(Term, #state{term=Term}=State) -> State.
 
 vote(#request_vote{term=Term}, #state{term=CurrentTerm, me=Me})
         when Term < CurrentTerm ->
@@ -908,47 +905,21 @@ candidate_log_up_to_date(#request_vote{last_log_term=CandidateTerm,
                              cr_log:get_last_term(Me),
                              cr_log:get_last_index(Me)).
 
-candidate_log_up_to_date(CandidateTerm, _CandidateIndex, LogTerm, _LogIndex)
-    when CandidateTerm > LogTerm ->
-        true;
-candidate_log_up_to_date(CandidateTerm, _CandidateIndex, LogTerm, _LogIndex)
-    when CandidateTerm < LogTerm ->
-        false;
-candidate_log_up_to_date(Term, CandidateIndex, Term, LogIndex)
-    when CandidateIndex > LogIndex ->
-        true;
-candidate_log_up_to_date(Term, CandidateIndex, Term, LogIndex)
-    when CandidateIndex < LogIndex ->
-        false;
-candidate_log_up_to_date(Term, Index, Term, Index) ->
-    true.
+candidate_log_up_to_date(CandidateTerm, _CandidateIndex, LogTerm, _LogIndex) when CandidateTerm > LogTerm -> true;
+candidate_log_up_to_date(CandidateTerm, _CandidateIndex, LogTerm, _LogIndex) when CandidateTerm < LogTerm -> false;
+candidate_log_up_to_date(Term, CandidateIndex, Term, LogIndex) when CandidateIndex > LogIndex -> true;
+candidate_log_up_to_date(Term, CandidateIndex, Term, LogIndex) when CandidateIndex < LogIndex -> false;
+candidate_log_up_to_date(Term, Index, Term, Index) -> true.
 
-successful_vote(CurrentTerm, Me) ->
-    {ok, #vote{term=CurrentTerm, success=true, from=Me}}.
-
-fail_vote(CurrentTerm, Me) ->
-    {ok, #vote{term=CurrentTerm, success=false, from=Me}}.
-
-election_timeout() ->
-    crypto:rand_uniform(?ELECTION_TIMEOUT_MIN, ?ELECTION_TIMEOUT_MAX).
-
-heartbeat_timeout() ->
-    ?HEARTBEAT_TIMEOUT.
+successful_vote(CurrentTerm, Me) -> {ok, #vote{term=CurrentTerm, success=true, from=Me}}.
+fail_vote(CurrentTerm, Me) -> {ok, #vote{term=CurrentTerm, success=false, from=Me}}.
+election_timeout() -> crypto:rand_uniform(?ELECTION_TIMEOUT_MIN, ?ELECTION_TIMEOUT_MAX).
+heartbeat_timeout() -> ?HEARTBEAT_TIMEOUT.
 
 reset_timer(Duration, State=#state{timer=Timer}) ->
     _ = gen_fsm:cancel_timer(Timer),
     NewTimer = gen_fsm:send_event_after(Duration, timeout),
     State#state{timer=NewTimer}.
-
-%%=============================================================================
-%% Tests
-%%=============================================================================
-
--ifdef(TEST).
-
--include_lib("eunit/include/eunit.hrl").
-
--endif.
 
 rsend(To, #request_vote{from=From}=Msg) -> rsend(To, From, Msg);
 rsend(To, #append_entries{from=From}=Msg) -> rsend(To, From, Msg).

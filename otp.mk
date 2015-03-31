@@ -9,8 +9,8 @@ VM       := vm.args
 SYS      := sys.config
 PLT_NAME := ~/.n2o_dialyzer.plt
 ERL_ARGS := -args_file $(VM) -config $(SYS) -setcookie $(COOKIE) -name $(NAME)@127.0.0.1
-RUN_DIR  := apps/deposits/priv/static/log
-LOG_DIR  := apps/deposits/priv/static/log/log
+RUN_DIR  := data/$(NAME)/log
+LOG_DIR  := data/$(NAME)/log
 empty    :=
 ROOTS    := . deps
 space    := $(empty) $(empty)
@@ -24,7 +24,6 @@ relx     := "{release,{$(RELEASE),\"$(VER)\"},[$(RELEASE)]}.\\n{include_erts,tru
 
 test: eunit ct
 deps up:
-	mkdir -p data
 	$(MAD) $@
 compile: deps
 	$(MAD) compile skip_deps=true
@@ -36,6 +35,7 @@ clean:
 $(RUN_DIR) $(LOG_DIR):
 	mkdir -p $(RUN_DIR) & mkdir -p $(LOG_DIR)
 console: .applist
+	mkdir -p data
 	ERL_LIBS="$(ERL_LIBS)" erl $(ERL_ARGS) -eval '[application:start(A) || A <- $(shell cat .applist)]'
 start: $(RUN_DIR) $(LOG_DIR) .applist
 	RUN_ERL_LOG_GENERATIONS=1000 RUN_ERL_LOG_MAXSIZE=20000000 \
