@@ -12,87 +12,132 @@
 <div class=app>
 
 <div align=right>FROM: 5HT<br>
-                   TO: PUBLIC<br>
+                   TO: PUB<br>
                  DATE: 15 MAR 2015</div>
 
-<h2>CR: chain replication protocol</h2>
+<h2>Chain Replication Database</h2>
 
 <div class=message>
 
 <p>In banking system demands are very tight. Database
 should be at least tripled, stand-by nodes should pick up
 master reads from failover node, writes should be
-accepted on a reasonble quorum, and later after
-recovery and rejoin should be merged, database
+accepted on a reasonble quorum, failover must be followed by recovery, database
 should be able to scale even with the RAM/DISC limitations.</p>
 
 <p>No data should be treated as written otherwise that commited to all replicas.
 All this circumstances leads us to chain replication protocol as a simple and natural
 feedback to this challenge.</p>
 
-<p>Chain replication protocol was already used before
-in such products like Google FS, HDFS, mongodb, Cassandra, etc.
+<p>Different replication techniques exists to satisfy replication demands.
+Master-slave replication is most widely known type of replication
+used before in such products like GFS, HDFS, mongodb, etc. Quorum Intersection
+is another technique used in databases like Cassandra or Amazon Dynamo.
 They mostly provide a consistent distributed repository
 for event tables or for file storage. In banking industry
-we synchronize account balance with single end-point provider
-and track the transactions history log up to merging and cut-offs.
+we synchronize account balances and need simple and managable
+protocol for storage consistency issuing high demand on system integrity.
 </p>
+
+<p>There are several classes of error usually implied when dealing with failure detection.
+The most weak class is fail-stop events, when the outage is normal or predictable.
+The second class is crash-failures, the ubnormal terminations and outages. The most strong
+type of failures are byzantine failures resistant to bit-flips,
+hacked parties or any types of compromising the transaction objects.
+For banking applications the byzantine fault tolerance is desired,
+despite it affects the latency.</p>
 
 <h3>Features</h3>
 
 <p>
-<ul><li>HMAC signing for Byzantine capabilities</li>
-<li>Distributed transaction on replicas sequence</li>
-<li>Separate endpoints for HEART, CLIENT and SERVER protocols</li>
-<li>Quorum 2N+1 in 3N+1 for accepting writes</li>
-<li>Linear consistent ring hashing</li>
-<li>Automatic stand-by switchover</li>
-<li>Data sync on recovery</li>
+<ul>
+<li>CP database</li>
+<li>2N+1 nodes tolerates N failures</li>
+<li>Consistent hashing DHT</li>
+<li>RAFT for managing server configurations timeline</li>
+<li>HMAC signing for Byzantine capabilities</li>
+<li>Various database backends: <b>mnesia</b>, <b>riak</b>, <b>redis</b>, <b>fs</b>, <b>sql</b></li>
 <li>High-performance non-blocking TCP acceptor</li>
-<li>HanoidDB backend database</li>
-<li>Pure and clean codebase</li></ul></p>
+<li>Separate endpoints for HEART, CLIENT and SERVER protocols</li>
+<li>Pure, clean and understandable codebase</li></ul></p>
 
+<h3>Basic protocol</h3>
 
-<h3>Basic Protocol</h3>
-
-<div class=note style="background-color:#FAFAFA;"><p><b>Transaction definition</b>
+<p><div class=note style="background-color:#FAFAFA;"><p><b>Command</b>
 <code>
 </code><p></div>
 <div class=note>
-<p>All replicas are sequenced as chains. Transaction in CR means
-traversal command performing forward over the chain. In case with
-<b>commit</b> backward propagation it means also XA protocol. All writes
-are come to the chain's head, all reads come to chain's tail.
-In original protocol backward propagation is ACK 
-</p></div>
+<p>Command is the atomic event that can be performed
+in single process context at a single machine.</p></div></P>
 
+<p>CR provides extensible set of possible commands:</p>
+
+<p>
+<ul>
+<li>PUT the object to database</li>
+<li>LINK the object to some doubly-linked list</li>
+<li>REMOVE the object from the list and database</li>
+</ul></p>
+
+<p>This set of commands refers to KVS the database framework for
+storing the doubly linked lists (it can be called chains/feeds/sequences)
+using the two basic record types: <b>#container</b>, who store the top of a chain along
+with chain aggregation counters; and <b>#iterator</b>, who provides next and prev
+fields for traversal.</p>
+
+<div class=note style="background-color:#FAFAFA;"><p><b>Distributed Transaction</b>
+<code>
+</code><p></div>
+<div class=note>
+<p>All replicas are sequenced into the chains. Transaction is a
+command performing forward over the ordered chain of replicas. This chain
+is called configuration. All writes come to the chain's head,
+all reads come to chain's tail.</p></div>
 
 <p><center>Picture 1. Chain<br><br><img src="images/replicas.svg" height=200></center></p>
 
+<p><div class=note style="background-color:#FAFAFA;"><p><b>Replication Log</b>
+<code>
+</code><p></div>
+<div class=note>
+<p>During transaction, the command is saved in replication
+log on each replica of the transaction. This log is append-only
+disk structure and is also called this history of replica's operations.</p></div></p>
+
+<p>The replication log is also uses KVS as underlying storage.
+As a replication log container it uses <b>#log</b> type and command is stored
+as <b>#operation</b> record. Each replica has its own log.</p>
+
+<p><center>Picture 2. Log<br><br><img src="images/log.svg" height=400></center></p>
+
 <h3>Failures</h3>
 
-<p><b>Head Failure</b>. Query processing continues uninterrupted.
-Update processing is unavailable for 2 message delivery delays
-while the master broadcasts a message to the new head and its
-successor, and then it notifies all clients of the new head
-using a broadcast.</p>
+<p><div class=note style="background-color:#FAFAFA;"><p><b>Configuration Tracking</b>
+<code>
+</code><p></div>
+<div class=note>
+<p>The configuration is a dynamic property of transaction.
+During transaction it may change due to byzantine failures,
+leading us to reconfigure the replicas in a chain. The another consistent
+system is needed to track the dynamic configurations.</p></div></P>
 
-<p><b>Middle Server Failure</b>. Query processing continues
-uninterrupted. Update processing can be delayed but update
-requests are not lost, hence no transient outage is experienced,
-provided some server in a prefix of the chain that has received
-the request remains operating. Failure of a middle server can
-lead to a delay in processing an update request—the protocol
-of Figure 3 involves 4 message delivery delays.</p>
+<p>To make the shard highly available, we use replication
+and dynamically change the configuration of replicas
+in order to deal with crash failures and unresponsiveness.
+Each machine in a cluster has single append-only configuration
+log which is not based on KVS due to latency requirements.
+Configuration log is a binary file written by RAFT protocol commands.
+There is only two commands which could be performed over the configuration log:</p>
 
-<p><b>Tail Failure</b>. Query and update processing
-are both unavailable for 2 message delivery delays
-while the master sends a message to the new tail and
-then notifies all clients of the new tail using a broadcast.</p>
+<p>
+<ul>
+<li>ADD replica to configuration</li>
+<li>DELETE replica from configuration</li>
+</ul></p>
 
-<h3>Sync Protocol</h3>
+<h3>Safety</h3>
 
-<div class=note style="background-color:#FAFAFA;"><p><b>Sync on recovery</b>
+<div class=note style="background-color:#FAFAFA;"><p><b>Stable Log</b>
 <code>
 </code><p>
 </div>
@@ -102,27 +147,9 @@ as deposition, account or client creation, etc having N+1 live replicas among 2*
 Such operations as withdraw or balance check should be performed only on quorum island.
 </p></div>
 
-<p><center>Picture 2. Sync<br><br><img src="images/merging.svg" height=300></center></p>
+<p><center>Picture 3. Stable Configurations<br><br><img src="images/merging.svg" height=300></center></p>
 
-<h3>Log Protocol</h3>
-
-<div class=note style="background-color:#FAFAFA;"><p><b>Local Transactions</b>
-<code>
-</code><p>
-</div>
-<div class=note>
-<p>Each operation over some list stored in the system,
-like list of account's transactions is performed along
-with it's log in <b>#log</b> table. You should be able
-to cut-off in checkpoints transaction logs for archiving,
-compactification etc. Mainly transaction logs are needed
-to quickly pickup operational data that should be synced
-till the failover moment.
-</p></div>
-
-<p>Each transaction context </p>
-
-<p><center>Picture 3. Log<br><br><img src="images/log.svg" height=400></center></p>
+<h3>Liveness</h3>
 
 <h3>OTP protocol</h3>
 
@@ -149,42 +176,6 @@ that could be embeded in any toplevel application. We use one supervision
 tree and <b>gen_server</b> per one TCP endpoint along with separate
 <b>vnode_sup</b> supervision for VNODE transactional contexts per hashring vnode.</p>
 
-<!--div class=note style="background-color:#FAFAFA;">
-<p>Booting<code>
-</code><p></div>
-<div class=note>
-<pre>
-tcp(Name,Port,Mod,HashRing) ->
-  { Name,{cr_tcp,start_link,[Name,Port,Mod,HashRing]},
-    permanent,2000,worker,[cr_tcp]}.
-
-sup(S) ->
-  { S,{supervisor,start_link,[{local,S},cr_connection,[]]},
-    permanent,infinity,supervisor,[]}.
-
-init([HashRing,Opts]) ->
-    {ok, {{one_for_one, 5, 60},
-        lists:flatten([ protocol(O,HashRing) || O<-Opts ])
-     ++ [ sup(vnode_sup) ] }}.
-
-stop(_) -> ok.
-start(_,_) ->
-    HashRing = {Partitions,VNodes} = cr_hash:fresh(40,node()),
-    Sup = supervisor:start_link({local, cr_sup}, ?MODULE,
-     [ HashRing, [ { interconnect, 9000, cr_interconnect },
-                   { ping,         9001, cr_ping },
-                   { client,       9002, cr_client } ]]),
-     [ cr_vnode:start_vnode({Index,Node},HashRing)
-                         || {Index,Node} <- VNodes ],
-    Sup.
-
-protocol({Name,Port,Mod},HashRing) ->
-  SupName = list_to_atom(lists:concat([Name,'_sup'])),
-  [ tcp(Name,Port,Mod,HashRing),   % TCP listener gen_server
-    sup(SupName)        ]. % Accepted Clients Supervisor
-</pre>
-</p></div-->
-
 <p><center>Picture 4. Supervision<br><br><img src="images/sup.png" height=400></center></p>
 
 <br>
@@ -192,6 +183,7 @@ protocol({Name,Port,Mod},HashRing) ->
 <div class=note>
 <pre>
 > [{T,Pid}||{T,Pid,_,_}<-supervisor:which_children(cr_sup)].
+
 [{vnode_sup,<0.52.0>},
  {client_sup,<0.51.0>},
  {client,<0.50.0>},
@@ -201,11 +193,11 @@ protocol({Name,Port,Mod},HashRing) ->
  {interconnect,<0.46.0>}]
 </pre></div>
 
-<h3>Hash Ring</h3>
+<h3>Consistent Hash Ring</h3>
 
 <p>Bulding a consistent hash ring is a key feature
-that opens a door to the distributed system. CR is using <b>basho</b>
-chash module.</p>
+that opens a door to the distributed system.
+CR is using only five functions to model the DHT ring.</p>
 
 <div class=note>
 <pre>
@@ -221,6 +213,34 @@ chash module.</p>
  {1205738850797994907518039986990933491216144347942,<0.60.0>}]
 </pre></div>
 
+<h3>Literature</h3>
+
+&nbsp;[1]. Hussam Abu-Libdeh, Robbert van Renesse, Ymir Vigfusson.<br>
+<a href="http://www.ymsir.com/papers/sharding-socc.pdf">
+&nbsp;&nbsp;&nbsp;&nbsp; Leveraging Sharding in the Design of Scalable Replication Protocols</a><br><br>
+
+[2]. Robbert van Renesse, Chi Ho, Nicolas Schiper.<br>
+<a href="http://www.cs.cornell.edu/home/rvr/newpapers/opodis2012.pdf">
+&nbsp;&nbsp;&nbsp;&nbsp; Byzantine Chain Replication</a><br><br>
+
+[3]. Robbert van Renesse, Nicolas Schiper.<br>
+<a href="http://www.cs.cornell.edu/home/rvr/papers/osdi04.pdf">
+&nbsp;&nbsp;&nbsp;&nbsp; Chain Replication for
+Supporting High Throughput and Availability</a>
+
+<h3>Credits</h3>
+
+<p>
+<ul>
+<li>Maxim Sokhatsky</li>
+<li>Vladimir Kirillov</li>
+<li>Sergey Klimenko</li>
+<li>Valery Maleshkin</li>
+<li>Victor Sovietov</li>
+</ul></p>
+
+<br><br>
+<center> 2015 &copy; Synrc Research Center, s.r.o.</center>
 
 </div>
 </div>
