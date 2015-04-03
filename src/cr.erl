@@ -1,4 +1,5 @@
 -module(cr).
+-description('Distributed Transaction Coordinator').
 -copyright('Maxim Sokhatsky').
 -include("cr.hrl").
 -include_lib("db/include/transaction.hrl").
@@ -117,3 +118,5 @@ rpc({badrpc,_}) -> {error,error};
 rpc(Value) -> Value.
 
 clean() -> kvs:destroy(), kvs:join().
+
+log_modules() -> [cr,cr_log].

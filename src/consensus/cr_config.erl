@@ -76,4 +76,3 @@ value(Peer, Responses) ->
         {ok, Value} -> Value;
         error -> 0 end.
 
-log_modules() -> [cr,cr_log].
