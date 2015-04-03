@@ -13,7 +13,7 @@
 
 <div align=right>FROM: 5HT<br>
                    TO: PUB<br>
-                 DATE: 15 MAR 2015</div>
+                 DATE: 4 APR 2015</div>
 
 <h2>Chain Replication Database</h2>
 
@@ -156,7 +156,7 @@ There is only two commands which could be performed over the configuration log:<
 
 <h4>Heart Monitor Protocol</h4>
 
-<p><b>#switchConfig</b> [Node,Configuration,NewConfiguration] —
+<p><b>#reconfig</b> [Node,Configuration,NewConfiguration] —
 The heart monitor waits for a set of valid histories from
 a quorum of replicas in current configuration.
 A valid history contains at most one record per operation.
@@ -164,7 +164,8 @@ The oracle then issues an #resume message for all nodes in NewConfiguration
 with the log position of maximal common prefix (last replica in previous Configuration).
 The heart monitor can issue at most one #resume message per Configuration generation.</p>
 
-<p><b>#ping</b> — Round-Robin ping over nodes of the initial Configuration just after launch.</p>
+<p><b>#ping</b> — Round-Robin ping over nodes of Configuration. In initial
+configuration all nodes are active or resumed.</p>
 
 <h3>Safety</h3>
 

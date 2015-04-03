@@ -1,4 +1,5 @@
 -module(cr_heart).
+-description('Heart Monitor').
 -copyright('Maxim Sokhatsky').
 -include("cr.hrl").
 -compile(export_all).

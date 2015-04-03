@@ -1,5 +1,5 @@
 -module(cr_vnode).
--description('Hash-ring Transaction Coordinator').
+-description('Ring Replica').
 -copyright('Maxim Sokhatsky').
 -include("cr.hrl").
 -include_lib("kvs/include/kvs.hrl").
