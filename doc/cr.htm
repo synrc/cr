@@ -61,7 +61,7 @@ despite it affects the latency.</p>
 <li>Separate endpoints for HEART, CLIENT and SERVER protocols</li>
 <li>Pure, clean and understandable codebase</li></ul></p>
 
-<h3>Basic protocol</h3>
+<h3>Chain Replication Protocol</h3>
 
 <p><div class=note style="background-color:#FAFAFA;"><p><b>Command</b>
 <code>
@@ -110,6 +110,25 @@ as <b>#operation</b> record. Each replica has its own log.</p>
 
 <p><center>Picture 2. Log<br><br><img src="images/log.svg" height=400></center></p>
 
+<h4>Replica Protocol</h4>
+
+<p><b>#operation</b> [Vnode,Chain,Operation] — Any active replica Vnode in
+configuration Chain can issue an operation command only if each
+preceding replica in Chain, if any, has done likewise and there
+is no conflicting operation for s in its history. Vnode also adds
+a new order proof to its history.</p>
+
+<p><b>#suspend</b> [Vnode] — An active replica Vnode can
+suspend updating its history by becoming immutable at any time.
+Only heart monitor can issue a becomeImmutable message.
+The replica signs a wedged statement to notify heart monitor
+that it is immutable and what its history is.</p>
+
+<p><b>#resume</b> [Vnode,Configuration,History] — A pending
+replica Vnode in Configuration can resume handling operations
+if the Heart Monitor has synchronized the history between
+nodes to the greatest common prefix log.</p>
+
 <h3>Failures</h3>
 
 <p><div class=note style="background-color:#FAFAFA;"><p><b>Configuration Tracking</b>
@@ -134,6 +153,18 @@ There is only two commands which could be performed over the configuration log:<
 <li>ADD replica to configuration</li>
 <li>DELETE replica from configuration</li>
 </ul></p>
+
+<h4>Heart Monitor Protocol</h4>
+
+<p><b>#switchConfig</b> [Node,Configuration,NewConfiguration] —
+The heart monitor waits for a set of valid histories from
+a quorum of replicas in current configuration.
+A valid history contains at most one record per operation.
+The oracle then issues an #resume message for all nodes in NewConfiguration
+with the log position of maximal common prefix (last replica in previous Configuration).
+The heart monitor can issue at most one #resume message per Configuration generation.</p>
+
+<p><b>#ping</b> — Round-Robin ping over nodes of the initial Configuration just after launch.</p>
 
 <h3>Safety</h3>
 
