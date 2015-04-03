@@ -1,6 +1,8 @@
 Byzantine Chain Replication Protocol
 ====================================
 
+[![Join the chat at https://gitter.im/spawnproc/cr](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/spawnproc/cr?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 In banking system demands are very tight. Database
 should be at least tripled, stand-by nodes should pick up
 master reads from failover node, writes should be
