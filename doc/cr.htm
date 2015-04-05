@@ -45,7 +45,8 @@ The second class is crash-failures, the ubnormal terminations and outages. The m
 type of failures are byzantine failures resistant to bit-flips,
 hacked parties or any types of compromising the transaction objects.
 For banking applications the byzantine fault tolerance is desired,
-despite it affects the latency.</p>
+despite it affects the latency. However we will show that CR latency
+is acceptible even in compare with web applications.</p>
 
 <h3>Features</h3>
 
@@ -61,13 +62,79 @@ despite it affects the latency.</p>
 <li>Separate endpoints for HEART, CLIENT and SERVER protocols</li>
 <li>Pure, clean and understandable codebase</li></ul></p>
 
+<h3>Consistent Hash Ring</h3>
+
+<p>Bulding a consistent hash ring is a key feature
+that opens a door to the distributed system.
+CR is using only five functions to model the DHT ring.
+Ring provides a desirable probability in series
+of nines of working event condition.</p>
+
+<p>
+<div class=note>
+<pre>
+ > cr:ring().
+
+{12,
+ [{0,0},
+  {121791803110908576516973736059690251637994378581,1},
+  {243583606221817153033947472119380503275988757162,1},
+  {365375409332725729550921208179070754913983135743,1},
+  {487167212443634306067894944238761006551977514324,1},
+  {608959015554542882584868680298451258189971892905,2},
+  {730750818665451459101842416358141509827966271486,2},
+  {852542621776360035618816152417831761465960650067,2},
+  {974334424887268612135789888477522013103955028648,2},
+  {1096126227998177188652763624537212264741949407229,3},
+  {1217918031109085765169737360596902516379943785810,3},
+  {1339709834219994341686711096656592768017938164391,3},
+  {1461501637330902918203684832716283019655932542972,3}]}
+</pre></div>
+</p>
+
+<p>The ring or configuration is partitioned by shards or peers.</p>
+
+<p>
+<div class=note>
+<pre>
+> cr:peers().
+
+[{'cr1@127.0.0.1',9000,9001,9002},
+ {'cr2@127.0.0.1',9004,9005,9006},
+ {'cr3@127.0.0.1',9008,9009,9010}]
+</pre></div>
+</p>
+
+<p>Each peer is running several replica protocol vnodes. Each vnode is a
+replica process that serves a specific key-range.</p>
+
+<p>
+<div class=note>
+<pre>
+> cr:local().
+
+[{487167212443634306067894944238761006551977514324,<0.200.0>},
+ {365375409332725729550921208179070754913983135743,<0.199.0>},
+ {243583606221817153033947472119380503275988757162,<0.198.0>},
+ {121791803110908576516973736059690251637994378581,<0.197.0>}]
+</pre></div>
+</p>
+
+<div class=note>
+<pre>
+> cr:chain(foo).
+
+[{1461501637330902918203684832716283019655932542972,3},
+ {487167212443634306067894944238761006551977514324,1},
+ {974334424887268612135789888477522013103955028648,2}]</pre></div>
+
 <h3>Chain Replication Protocol</h3>
 
 <p><div class=note style="background-color:#FAFAFA;"><p><b>Command</b>
 <code>
 </code><p></div>
 <div class=note>
-<p>Command is the atomic event that can be performed
+<p>Command is an atomic event that can be performed
 in single process context at a single machine.</p></div></P>
 
 <p>CR provides extensible set of possible commands:</p>
@@ -111,6 +178,13 @@ as <b>#operation</b> record. Each replica has its own log.</p>
 <p><center>Picture 2. Log<br><br><img src="images/log.svg" height=400></center></p>
 
 <h4>Replica Protocol</h4>
+
+<p>Some assumptions are implied during protocol description.</p>
+
+<blockquote><ul><li>1) each peer has at least one non-faulty vnode;</li>
+<li>2) ring is tracked by external consensus or</li>
+<li>3) ring has at least one peer with no faulty vnodes.</li>
+</ul></blockquote>
 
 <p><b>#operation</b> [Vnode,Chain,Operation] — Any active replica Vnode in
 configuration Chain can issue an operation command only if each
@@ -169,19 +243,33 @@ configuration all nodes are active or resumed.</p>
 
 <h3>Safety</h3>
 
-<div class=note style="background-color:#FAFAFA;"><p><b>Stable Log</b>
+<div class=note style="background-color:#FAFAFA;"><p><b>Stable Operation Log</b>
+
+<p>The equation specifies what operations O are safe, when all its replicas are commited.
+but not when or in what order to do them.
+In other words, the system is asynchronous. In this formula we call stable
+operation log having operations commited on all replicas.</p>
+
 <code>
+Stable = [ R || R <- replicas(O),
+                status(R) == commited,
+                length(R) == N ]
 </code><p>
 </div>
 <div class=note>
-<p>During split-brains some operation could be accepted for writing,
-as deposition, account or client creation, etc having N+1 live replicas among 2*N+1 nodes.
-Such operations as withdraw or balance check should be performed only on quorum island.
-</p></div>
+<p><b>NOTE</b>: due to asynchronous nature of transaction service the operations
+log will be always unordered. As on Picture 3 it should GCP = 2.</p></div>
 
-<p><center>Picture 3. Stable Configurations<br><br><img src="images/merging.svg" height=300></center></p>
+<p><center>Picture 3. Greatest common prefix<br><br>
+<img src="images/merging.svg" height=300></center></p>
 
 <h3>Liveness</h3>
+
+<p>There is always eventually a configuration in which all replicas
+are correct and do not become suspended. Failure detection of liveness
+is tracked by Heart Monitor which pings each node and reconfigures the
+nodes for synchronizing the configuration consensus log.</p>
+
 
 <h3>OTP protocol</h3>
 
@@ -208,13 +296,40 @@ that could be embeded in any toplevel application. We use one supervision
 tree and <b>gen_server</b> per one TCP endpoint along with separate
 <b>vnode_sup</b> supervision for VNODE transactional contexts per hashring vnode.</p>
 
+<p>The Chain Replication Database application is built using Synrc Application Stack.
+Among them we have <b>fs</b> native file-system listener, <b>sh</b> shell executor
+for running external commands, powerful <b>mad</b> rebar replacement which is
+able to pack application inside single-file bundle. During development we
+also use <b>otp.mk</b> and <b>active</b> file reloader that uses native
+filesystem event on each platform. The database itself built using
+<b>kvs</b> with <b>mnesia</b> backend and <b>db</b> banking schema as example.</p>
+
+<p><div class=note>
+<pre>
+> application:which_applications().
+
+[{cr,"Chain Replication","0.1"},
+ {sh,"VXZ SH Executor","0.9"},
+ {mad,"MAD VXZ Build Tool","2.2"},
+ {db,"Bank Database","1"},
+ {active,"ACT VXZ Continuous Compilation","0.9"},
+ {kvs,"KVS Abstract Term Database","1"},
+ {mnesia,"MNESIA  CXC 138 12","4.12.3"},
+ {fs,"VXZ FS Listener","0.9.1"},
+ {stdlib,"ERTS  CXC 138 10","2.2"},
+ {kernel,"ERTS  CXC 138 10","3.0.3"}]
+</pre>
+</div>
+</p>
+
+<p>Supervision tree of chain replication supervisor:</p>
+
 <p><center>Picture 4. Supervision<br><br><img src="images/sup.png" height=400></center></p>
 
-<br>
-
+<p>
 <div class=note>
 <pre>
-> [{T,Pid}||{T,Pid,_,_}<-supervisor:which_children(cr_sup)].
+> cr:sup().
 
 [{vnode_sup,<0.52.0>},
  {client_sup,<0.51.0>},
@@ -224,25 +339,37 @@ tree and <b>gen_server</b> per one TCP endpoint along with separate
  {interconnect_sup,<0.47.0>},
  {interconnect,<0.46.0>}]
 </pre></div>
+</p>
 
-<h3>Consistent Hash Ring</h3>
-
-<p>Bulding a consistent hash ring is a key feature
-that opens a door to the distributed system.
-CR is using only five functions to model the DHT ring.</p>
+<p>For benchmarking database please populate the it with data but without
+overloading the database:</p>
 
 <div class=note>
 <pre>
-> [{I,P}||{{I,_},P,_,_} <- supervisor:which_children(vnode_sup)].
+    [
+      begin
+          cr:test(500),
+          timer:sleep(1000)
+      end
+          || ___ <- lists:seq(1,10)
+    ].
 
-[{1461501637330902918203684832716283019655932542960,<0.53.0>},
- {1424964096397630345248592711898375944164534229386,<0.54.0>},
- {1388426555464357772293500591080468868673135915812,<0.55.0>},
- {1351889014531085199338408470262561793181737602238,<0.56.0>},
- {1315351473597812626383316349444654717690339288664,<0.57.0>},
- {1278813932664540053428224228626747642198940975090,<0.58.0>},
- {1242276391731267480473132107808840566707542661516,<0.59.0>},
- {1205738850797994907518039986990933491216144347942,<0.60.0>}]
+> cr:dump().
+</pre>
+<pre style="font-size:10pt;">
+                                               vnode   i  n        top      log        latency
+    121791803110908576516973736059690251637994378581   1  1       6506     1607       1/315/97
+    243583606221817153033947472119380503275988757162   2  1       6508     1662      1/317/100
+    365375409332725729550921208179070754913983135743   3  1       6510     1658      2/317/105
+    487167212443634306067894944238761006551977514324   4  1       6505     1583      1/317/104
+    608959015554542882584868680298451258189971892905   5  2       6499     1637      3/317/115
+    730750818665451459101842416358141509827966271486   6  2       6510     1664      2/318/117
+    852542621776360035618816152417831761465960650067   7  2       6501     1634      2/311/115
+    974334424887268612135789888477522013103955028648   8  2       6500     1575       3/290/96
+   1096126227998177188652763624537212264741949407229   9  3       6497     1607      3/316/118
+   1217918031109085765169737360596902516379943785810  10  3       6510     1662      3/318/117
+   1339709834219994341686711096656592768017938164391  11  3       6496     1658      3/311/106
+   1461501637330902918203684832716283019655932542972  12  3       6505     1583      2/295/104
 </pre></div>
 
 <h3>Literature</h3>

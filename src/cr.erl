@@ -120,3 +120,7 @@ rpc(Value) -> Value.
 clean() -> kvs:destroy(), kvs:join().
 
 log_modules() -> [cr,cr_log].
+
+sup() -> [{T,Pid}||{T,Pid,_,_}<-supervisor:which_children(cr_sup)].
+
+local() -> [{I,P}||{I,P,_,_} <- supervisor:which_children(vnode_sup)].
