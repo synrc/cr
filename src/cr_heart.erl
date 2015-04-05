@@ -6,10 +6,10 @@
 -record(state, {name,nodes,timers}).
 -export(?GEN_SERVER).
 
-start_link(UniqueName,HashRing) ->
-    gen_server:start_link(?MODULE, [UniqueName,HashRing], []).
+start_link(Name,Nodes) ->
+    gen_server:start_link(?MODULE, [Name,Nodes], []).
 
-init([UniqueName,Nodes]) ->
+init([Name,Nodes]) ->
 
     Timers = [ begin
           [_,Addr]=string:tokens(atom_to_list(erlang:node()),"@"),
@@ -19,9 +19,9 @@ init([UniqueName,Nodes]) ->
       end || {Node,_,P2,_}<-Nodes],
 
     error_logger:info_msg("HEART PROTOCOL: started: ~p~n"
-                                   "Nodes: ~p~n",[UniqueName,Timers]),
+                                   "Nodes: ~p~n",[Name,Timers]),
 
-    {ok,#state{name=UniqueName,nodes=Nodes,timers=Timers}}.
+    {ok,#state{name=Name,nodes=Nodes,timers=Timers}}.
 
 timer_restart(Diff,Connect,Node,Socket) ->
     {X,Y,Z} = Diff,

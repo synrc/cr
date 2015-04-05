@@ -15,6 +15,10 @@ vnode({I,N})             -> {I,{cr_vnode,start_link,
                             [{I,N},cr_kvs]},
                             permanent,2000,worker,[cr_vnode]}.
 
+heart(Nodes)             -> {heart,{cr_heart,start_link,
+                            ["heart",Nodes]},
+                            permanent,2000,worker,[cr_heart]}.
+
 log({I,N},Nodes)         -> {cr_log:logname(N),{cr_log,start_link,
                             [N,#rafter_opts{cluster=Nodes}]},
                             permanent,2000,worker,[cr_log]}.
@@ -28,6 +32,7 @@ init([Nodes,Opts]) ->
               lists:flatten([ log({0,N},Nodes)    || {N,_,_,_} <- Nodes, N == node()]
                          ++ [ rafter({0,N},Nodes) || {N,_,_,_} <- Nodes, N == node()]
                          ++ [ protocol(O,Nodes) || O<-Opts ]
+                         ++ [ pool(heart_sup) ]
                          ++ [ pool(vnode_sup) ]) }}.
 
 stop(_)    -> ok.
@@ -41,7 +46,8 @@ start(_,_) ->
                 [  Peers, [ { interconnect, P1, cr_interconnect },
                             { ping,         P2, cr_ping },
                             { client,       P3, cr_client } ]]),
-    [ start_vnode({Index,Node}) || {Index,Node} <- VNodes, Node == cr:nodex(node()) ],
+    [ start_vnode({Index,Node},Peers) || {Index,Node} <- VNodes, Node == cr:nodex(node()) ],
+    supervisor:start_child(heart_sup,heart(Peers)),
     Sup.
 
 protocol({Name,Port,Mod},Nodes) ->
@@ -49,5 +55,5 @@ protocol({Name,Port,Mod},Nodes) ->
   [ tcp(Name,Port,Mod,Nodes),     % TCP listener gen_server
     pool(SupName)        ].       % Accepted Clients Supervisor
 
-start_vnode({0,_Name}) -> skip;
-start_vnode({Index,Name}) -> supervisor:start_child(vnode_sup,vnode({Index,Name})).
+start_vnode({0,_Name},Peers) -> skip;
+start_vnode({Index,Name},_ ) -> supervisor:start_child(vnode_sup,vnode({Index,Name})).
