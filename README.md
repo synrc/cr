@@ -67,7 +67,7 @@ New record will be applied: 500
 ```
 
 Fore generating sample data, let say 500 transactions you may run with `cr:test(500)`.
-By measuring accepring performance it's like 2000 Req/s.
+By measuring accepring performance it's like `2000 Req/s`.
 
 ```erlang
 > cr:dump().
@@ -88,10 +88,10 @@ By measuring accepring performance it's like 2000 Req/s.
 ok
 ```
 
-The latency in last column ~70 ms means the moment data is stored on all mnesia replicas.
+The latency in last column `~70 ms` means the moment data is stored on all mnesia replicas.
 The latency in a given example is for storing async_dirty using KVS
-chain linking (from 1 to 3 writers per operation, from 1 to 2 for lookups)
-clustered in 3 nodes with same replicas number.
+chain linking (from `1 to 3 msg per write operation, from `1 to 2 msg for lookups`)
+clustered in `3 nodes` with same replicas number.
 
 Let's say we want to see all the operations log of a given replica `391`.
 
@@ -153,11 +153,13 @@ as it was stored as atomic PUT.
 Licenses
 --------
 
-rafter and gen_paxos are distributed under the terms of
-Apache 2.0 http://www.apache.org/licenses/LICENSE-2.0.html
+* consensus protols 1) raft and 2) paxos are distributed under the terms of Apache 2.0 http://www.apache.org/licenses/LICENSE-2.0.html
+* cr itself is distributed under the DHARMA license: http://5ht.github.io/license.htm
 
 Credits
 -------
+
+Copyright (c) 2015 Synrc Research Center s.r.o.
 
 * Maxim Sokhatsky
 * Vladimir Kirillov
