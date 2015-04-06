@@ -116,15 +116,18 @@ retrieve the transaction created during operation.
 
 ```erlang
 > kvs:get(operation,391).
-{ok,{operation,391,undefined,log,
-               {121791803110908576516973736059690251637994378581,1},
-               387,undefined,[],false,undefined,
-               {prepare,{<0.41.0>,{1428,358105,840469}},
-                        [{121791803110908576516973736059690251637994378581,1},
-                         {608959015554542882584868680298451258189971892905,2}],
-                        {transaction,389,undefined,feed,undefined,undefined,
-                                     undefined,[],false,undefined,undefined,undefined,...}},
-               prepare,pending}}
+{ok,#operation{id = 391,version = undefined,container = log,
+               feed_id = {121791803110908576516973736059690251637994378581,1},   % VNODE
+               prev = 387,next = undefined,feeds = [],guard = false,
+               etc = undefined,
+               body = {prepare,{<0.41.0>,{1428,358105,840469}},
+                               [{121791803110908576516973736059690251637994378581,1},  % SIGNATURES
+                                {608959015554542882584868680298451258189971892905,2}],
+                               #transaction{id = 389,version = undefined,container = feed,
+                                            feed_id = undefined,prev = undefined,next = undefined,
+                                            feeds = [],guard = false,etc = undefined,
+                                            timestamp = undefined,beneficiary = undefined,...}},
+               name = prepare,status = pending}}
 ```
 
 The transaction. For linking transaction to the link you should use full XA
