@@ -90,7 +90,7 @@ ok
 
 The latency in last column `~70 ms` means the moment data is stored on all mnesia replicas.
 The latency in a given example is for storing async_dirty using KVS
-chain linking (from `1 to 3 msg per write operation, from `1 to 2 msg for lookups`)
+chain linking (from `1 to 3` msg per write operation, from `1 to 2` msg for lookups)
 clustered in `3 nodes` with same replicas number.
 
 Let's say we want to see all the operations log of a given replica `391`.
