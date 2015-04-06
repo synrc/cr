@@ -66,7 +66,7 @@ test(Num) ->
                      "New record will be applied: ~p~n",[O1,Num]),
     [cr:tx(#transaction{id=kvs:next_id(transaction,1)})||I<-lists:seq(1,Num)],
     O2 = lists:foldl(fun({_,_,_,A,_,_},Acc) -> A+Acc end,0,kvs:all(log)),
-    T2 = length(kvs:all(transaction)).
+    {transactions,T2 = length(kvs:all(transaction))}.
 
 log_size({I,N}) ->
     {ok,Log} = kvs:get(log,{I,N}),

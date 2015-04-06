@@ -58,20 +58,25 @@ can `make start NAME=cr2` nodes and later attach to them with `make attach NAME=
 Also the start is compatible within single folders, which cause no single problem.
 
 ```erlang
-> cr:test(500).
+> timer:tc(cr,test,[500]).
 
-=INFO REPORT==== 7-Apr-2015::00:49:09 ===
-cr:Already in Database: 12520
+=INFO REPORT==== 7-Apr-2015::00:56:34 ===
+cr:Already in Database: 14020
 New record will be applied: 500
-11510
+{214369,{transactions,11510}}
+```
 
+Fore generating sample data, let say 500 transactions you may run with `cr:test(500)`.
+By measuring accepring performance it's like 2000 Req/s.
+
+```erlang
 > cr:dump().
 
                                                vnode   i  n        top     latency
-    121791803110908576516973736059690251637994378581   1  1      13009    2/198/64
-    243583606221817153033947472119380503275988757162   2  1      13020    2/183/72
-    365375409332725729550921208179070754913983135743   3  1      13012    3/195/64
-    487167212443634306067894944238761006551977514324   4  1      13007    2/183/53
+    121791803110908576516973736059690251637994378581   1  1        391    2/198/64
+    243583606221817153033947472119380503275988757162   2  1        400    2/183/72
+    365375409332725729550921208179070754913983135743   3  1        388    3/195/64
+    487167212443634306067894944238761006551977514324   4  1        357    2/183/53
     608959015554542882584868680298451258189971892905   5  2      12994    2/198/67
     730750818665451459101842416358141509827966271486   6  2      13017    3/184/66
     852542621776360035618816152417831761465960650067   7  2      13019    2/201/75
@@ -83,7 +88,64 @@ New record will be applied: 500
 ok
 ```
 
-The latency in last column means the moment data is stored on all replicas.
+The latency in last column ~70 ms means the moment data is stored on all mnesia replicas.
+The latency in a given example is for storing async_dirty using KVS
+chain linking (from 1 to 3 writers per operation, from 1 to 2 for lookups)
+clustered in 3 nodes with same replicas number.
+
+Let's say we want to see all the operations log of a given replica `391`.
+
+```erlang
+> cr:dump(391).
+                                         operation         id       prev    i       size
+                      transaction:389:feed::false:        391        387    1        480
+                      transaction:399:feed::false:        387        382    1        500
+                      transaction:375:feed::false:        382        379    1        446
+                      transaction:373:feed::false:        379        378    1        446
+                      transaction:383:feed::false:        378        376    1        473
+                      transaction:392:feed::false:        376        374    1        500
+                      transaction:360:feed::false:        374        371    1        446
+                      transaction:366:feed::false:        371        370    1        473
+                      transaction:370:feed::false:        370        369    1        446
+                      transaction:371:feed::false:        369        368    1        446
+ok
+```
+
+You may check this from the other side. First retrieve the operation and then
+retrieve the transaction created during operation.
+
+```erlang
+> kvs:get(operation,391).
+{ok,{operation,391,undefined,log,
+               {121791803110908576516973736059690251637994378581,1},
+               387,undefined,[],false,undefined,
+               {prepare,{<0.41.0>,{1428,358105,840469}},
+                        [{121791803110908576516973736059690251637994378581,1},
+                         {608959015554542882584868680298451258189971892905,2}],
+                        {transaction,389,undefined,feed,undefined,undefined,
+                                     undefined,[],false,undefined,undefined,undefined,...}},
+               prepare,pending}}
+```
+
+The transaction. For linking transaction to the link you should use full XA
+protocol with two-stage confirmation (1) the PUT operation followed
+with (2) LINK operation to some feed, such as user account or customer admin list.
+
+```erlang
+> kvs:get(transaction,389).
+{ok,#transaction{id = 389,version = undefined,
+                 container = feed, feed_id = undefined, prev = undefined,
+                 next = undefined, feeds = [], guard = false, etc = undefined,
+                 timestamp = [], beneficiary = [],
+                 subsidiary = [], amount = [],tax = [],
+                 ballance = [], currency = [],
+                 description = [], info = [],
+                 prevdate = [], rate = [], item = []}}
+```
+
+The actiual Erlang business logic, banking transaction from `db` schema
+application is stored under 389 id. So you can easlity grab it unlinked
+as it was stored as atomic PUT.
 
 Licenses
 --------
