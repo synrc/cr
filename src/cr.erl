@@ -62,11 +62,11 @@ test() -> test(10).
 test(Num) ->
     O1 = lists:foldl(fun({_,_,_,A,_,_},Acc) -> A+Acc end,0,kvs:all(log)),
     T1 = length(kvs:all(transaction)),
-    kvs:info(?MODULE,"Ops before: ~p~n",[O1]),
+    kvs:info(?MODULE,"Already in Database: ~p~n"
+                     "New record will be applied: ~p~n",[O1,Num]),
     [cr:tx(#transaction{id=kvs:next_id(transaction,1)})||I<-lists:seq(1,Num)],
     O2 = lists:foldl(fun({_,_,_,A,_,_},Acc) -> A+Acc end,0,kvs:all(log)),
-    T2 = length(kvs:all(transaction)),
-    kvs:info(?MODULE,"Ops after: ~p~n",[O2]).
+    T2 = length(kvs:all(transaction)).
 
 log_size({I,N}) ->
     {ok,Log} = kvs:get(log,{I,N}),
