@@ -3,13 +3,10 @@
 -include("rafter.hrl").
 
 quorum_max(_Me, #config{state=blank}, _) -> 0;
-quorum_max(Me, #config{state=stable, oldservers=OldServers}, Responses) -> quorum_max(Me, OldServers, Responses);
-quorum_max(Me, #config{state=staging, oldservers=OldServers}, Responses) -> quorum_max(Me, OldServers, Responses);
+quorum_max(Me, #config{state=stable, newservers=OldServers}, Responses) -> quorum_max(Me, OldServers, Responses);
+quorum_max(Me, #config{state=staging, newservers=OldServers}, Responses) -> quorum_max(Me, OldServers, Responses);
 quorum_max(Me, #config{state=transitional, oldservers=Old, newservers=New}, Responses) -> min(quorum_max(Me, Old, Responses), quorum_max(Me, New, Responses));
 
-%% Sort the values received from the peers from lowest to highest
-%% Peers that haven't responded have a 0 for their value.
-%% This peer (Me) will always have the maximum value
 quorum_max(_, [], _) -> 0;
 quorum_max(Me, Servers, Responses) when (length(Servers) rem 2) =:= 0->
     Values = sorted_values(Me, Servers, Responses),
@@ -19,60 +16,42 @@ quorum_max(Me, Servers, Responses) ->
     lists:nth(length(Values) div 2 + 1, Values).
 
 quorum(_Me, #config{state=blank}, _Responses) -> false;
-quorum(Me, #config{state=stable, oldservers=OldServers}, Responses) -> quorum(Me, OldServers, Responses);
-quorum(Me, #config{state=staging, oldservers=OldServers}, Responses) -> quorum(Me, OldServers, Responses);
-quorum(Me, #config{state=transitional, oldservers=Old, newservers=New}, Responses) -> quorum(Me, Old, Responses) andalso quorum(Me, New, Responses);
-
-%% Responses doesn't contain a local vote which must be true if the local
-%% server is a member of the consensus group. Add 1 to TrueResponses in
-%% this case.
+quorum(Me, #config{state=stable,newservers=Servers}, Responses) -> quorum(Me, Servers, Responses);
+quorum(Me, #config{state=staging,newservers=Servers}, Responses) -> quorum(Me, Servers, Responses);
+quorum(Me, #config{state=transitional,oldservers=Old, newservers=New}, Responses) -> quorum(Me, Old, Responses) andalso quorum(Me, New, Responses);
 quorum(Me, Servers, Responses) ->
-    TrueResponses = [R || {Peer, R} <- dict:to_list(Responses), R =:= true,
-                                        lists:member(Peer, Servers)],
+    TrueResponses = [R || {Peer, R} <- dict:to_list(Responses),
+                          R =:= true,
+                          lists:member(Peer, Servers)],
     case lists:member(Me, Servers) of
-        true ->
-            length(TrueResponses) + 1 > length(Servers)/2;
-        false ->
-            %% We are about to commit a new configuration that doesn't contain
-            %% the local leader. We must therefore have responses from a
-            %% majority of the other servers to have a quorum.
-            length(TrueResponses) > length(Servers)/2
-    end.
+        true -> length(TrueResponses) + 1 > length(Servers)/2;
+        false -> length(TrueResponses) > length(Servers)/2 end.
 
 voters(Me, Config) -> lists:delete(Me, voters(Config)).
-voters(#config{state=transitional, oldservers=Old, newservers=New}) -> sets:to_list(sets:from_list(Old ++ New));
-voters(#config{oldservers=Old}) -> Old.
+voters(#config{oldservers=Old, newservers=New}) -> sets:to_list(sets:from_list(Old ++ New));
+voters(#config{newservers=Old}) -> Old.
 
 has_vote(_Me, #config{state=blank}) -> false;
-has_vote(Me, #config{state=transitional, oldservers=Old, newservers=New})-> lists:member(Me, Old) orelse lists:member(Me, New);
-has_vote(Me, #config{oldservers=Old}) -> lists:member(Me, Old).
+has_vote(Me, #config{oldservers=Old, newservers=New})-> lists:member(Me, Old) orelse lists:member(Me, New);
+has_vote(Me, #config{newservers=Old}) -> lists:member(Me, Old).
 
-followers(Me, #config{state=transitional, oldservers=Old, newservers=New}) -> lists:delete(Me, sets:to_list(sets:from_list(Old ++ New)));
-followers(Me, #config{state=staging, oldservers=Old, newservers=New}) -> lists:delete(Me, sets:to_list(sets:from_list(Old ++ New)));
-followers(Me, #config{oldservers=Old}) -> lists:delete(Me, Old).
+followers(Me, #config{oldservers=Old, newservers=New}) -> lists:delete(Me, sets:to_list(sets:from_list(Old ++ New)));
+followers(Me, #config{newservers=Old}) -> lists:delete(Me, Old).
 
-reconfig(#config{state=blank}=Config, Servers) -> Config#config{state=stable, oldservers=Servers};
-reconfig(#config{state=stable}=Config, Servers) -> Config#config{state=transitional, newservers=Servers}.
+reconfig(#config{state=Blank,newservers=OldNew}=Config, Servers) ->
+    Config#config{state=stable,oldservers=OldNew, newservers=Servers}.
 
 allow_config(#config{state=blank}, _NewServers) -> true;
-allow_config(#config{state=stable, oldservers=OldServers}, NewServers) when NewServers =/= OldServers -> true;
-allow_config(#config{oldservers=OldServers}, NewServers) when NewServers =:= OldServers -> {error, not_modified};
-allow_config(_Config, _NewServers) -> {error, config_in_progress}.
+allow_config(#config{newservers=OldServers}, NewServers) when NewServers =/= OldServers -> true;
+allow_config(_Config, _NewServers) -> {error, config_not_allowed}.
 
 sorted_values(Me, Servers, Responses) ->
     Vals = lists:sort(lists:map(fun(S) -> value(S, Responses) end, Servers)),
     case lists:member(Me, Servers) of
-        true ->
-            %% Me is always in front because it is 0 from having no response
-            %% Strip it off the front, and add the max to the end of the list
-            [_ | T] = Vals,
-            lists:reverse([lists:max(Vals) | lists:reverse(T)]);
-        false ->
-            Vals
-    end.
+        true -> [_ | T] = Vals, lists:reverse([lists:max(Vals) | lists:reverse(T)]);
+        false -> Vals end.
 
 value(Peer, Responses) ->
     case dict:find(Peer, Responses) of
         {ok, Value} -> Value;
         error -> 0 end.
-

@@ -20,31 +20,31 @@ start_connection(Module,Socket,Nodes) ->
     Sup.
 
 listen({socket_ready, Socket}, State) ->
-    error_logger:error_msg("SERVER: Socket Ready ~p~n", [Socket]),
+    kvs:info(?MODULE,"SERVER: Socket Ready ~p~n", [Socket]),
     inet:setopts(Socket, [{active, once}, {packet, 0}, binary]),
     {next_state, transfer, State#state{socket=Socket}, ?TIMEOUT};
 
 listen(Other, State) ->
-    error_logger:error_msg("SERVER: Unexpected message during listening ~p~n", [Other]),
+    kvs:info(?MODULE,"SERVER: Unexpected message during listening ~p~n", [Other]),
     {next_state, listen, State, ?TIMEOUT}.
 
 transfer({in,Binary}, #state{state=SubState,module=Module}=State) ->
-%    error_logger:error_msg("SERVER: RECV ~p~n", [Binary]),
+%    kvs:info(?MODULE,"SERVER: RECV ~p~n", [Binary]),
     NewSubState = Module:dispatch(cr:decode(Binary),SubState),
     {next_state, transfer, State#state{state=NewSubState}, ?TIMEOUT};
 
 transfer({out,Message}, #state{socket=Socket,state=SubState}=State) ->
-%    error_logger:error_msg("SERVER: SEND ~p~n", [Message]),
+%    kvs:info(?MODULE,"SERVER: SEND ~p~n", [Message]),
     Bytes = cr:encode(Message),
     gen_tcp:send(Socket, Bytes),
     {next_state, transfer, State, ?TIMEOUT};
 
 transfer(timeout, State) ->
-%    error_logger:error_msg("SERVER: Client connection timeout: ~p\n", [State]),
+%    kvs:info(?MODULE,"SERVER: Client connection timeout: ~p\n", [State]),
     {stop, normal, State};
 
 transfer(_Data,  State) ->
-    error_logger:error_msg("SERVER: unknown Data during transfer: ~p\n", [_Data]),
+    kvs:info("SERVER: unknown Data during transfer: ~p\n", [_Data]),
     {stop, normal, State}.
 
 start_link(Name,Mod,Socket,Nodes) ->
@@ -58,7 +58,7 @@ init([]) ->
     {ok, {SupFlags, []}};
 
 init([Name,Mod,Socket,Nodes]) ->
-    error_logger:info_msg("PROTOCOL: starting ~p listener: ~p~n",[self(),{Name,Mod}]),
+    kvs:info(?MODULE,"PROTOCOL: starting ~p listener: ~p~n",[self(),{Name,Mod}]),
     process_flag(trap_exit, true),
     {ok,listen,#state{module=Mod,name=Name,
                       socket=Socket,nodes=Nodes,
@@ -69,15 +69,15 @@ handle_info({tcp, Socket, Bin}, StateName, #state{module=Module,state=SubState} 
     ?MODULE:StateName({in,Bin}, State);
 
 handle_info({tcp_closed,_S}, _, State) ->
-    error_logger:info_msg("SERVER: TCP closed~n",[]),
+    kvs:info(?MODULE,"SERVER: TCP closed~n",[]),
     {stop, normal, State};
 
 handle_info({'EXIT', Pid,_}, StateName, #state{} = State) ->
-    error_logger:info_msg("SERVER: EXIT~n",[]),
+    kvs:info(?MODULE,"SERVER: EXIT~n",[]),
     {next_state, StateName, State};
 
 handle_info(_Info, StateName, State) ->
-    error_logger:info_msg("SERVER: Info ~p~n",[_Info]),
+    kvs:info(?MODULE,"SERVER: Info ~p~n",[_Info]),
     {noreply, StateName, State}.
 
 handle_event(Event, StateName, State) -> {stop, {StateName, undefined_event, Event}, State}.

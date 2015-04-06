@@ -135,7 +135,7 @@ follower(#append_entries{term=Term, from=From, prev_log_index=PrevLogIndex,
                          entries=Entries, commit_index=CommitIndex,
                          send_clock=Clock}=AppendEntries,
          _From, #state{me=Me}=State) ->
-    kvs:info(?MODULE,"RAFTER FOLLOWER #append Me: ~p~n",[Me]),
+    %kvs:info(?MODULE,"RAFTER FOLLOWER #append Me: ~p~n",[Me]),
     State2=set_term(Term, State),
     Rpy = #append_entries_rpy{send_clock=Clock,
                               term=Term,
@@ -156,28 +156,6 @@ follower(#append_entries{term=Term, from=From, prev_log_index=PrevLogIndex,
             {reply, NewRpy, follower, State5}
     end;
 
-%% Allow setting config in follower state only if the config is blank
-%% (e.g. the log is empty). A config entry must always be the first
-%% entry in every log.
-follower({set_config, {Id, NewServers}}, From,
-          #state{me=Me, followers=F, config=#config{state=blank}=C}=State) ->
-    kvs:info(?MODULE,"RAFTER FOLLOWER set_config Me: ~p~n",[Me]),
-    case lists:member(Me, NewServers) of
-        true ->
-            {Followers, Config} = reconfig(Me, F, C, NewServers, State),
-            NewState = State#state{config=Config, followers=Followers,
-                                   init_config=[Id, From]},
-            %% Transition to candidate state. Once we are elected leader we will
-            %% send the config to the other machines. We have to do it this way
-            %% so that the entry we log  will have a valid term and can be
-            %% committed without a noop.  Note that all other configs must
-            %% be blank on the other machines.
-            {next_state, candidate, NewState};
-        false ->
-            Error = {error, not_consensus_group_member},
-            {reply, Error, follower, State}
-    end;
-
 follower({set_config, _}, _From, #state{leader=undefined, me=Me, config=C}=State) ->
     kvs:info(?MODULE,"RAFTER FOLLOWER set_config ~p~n",[Me]),
     Error = no_leader_error(Me, C),
@@ -188,8 +166,7 @@ follower({set_config, _}, _From, #state{leader=Leader}=State) ->
     Reply = {error, {redirect, Leader}},
     {reply, Reply, follower, State};
 
-follower({read_op, _}, _From, #state{me=Me, config=Config,
-                                           leader=undefined}=State) ->
+follower({read_op, _}, _From, #state{me=Me, config=Config, leader=undefined}=State) ->
     kvs:info(?MODULE,"RAFTER FOLLOWER read_op ~p~n",[Me]),
     Error = no_leader_error(Me, Config),
     {reply, {error, Error}, follower, State};
@@ -199,8 +176,7 @@ follower({read_op, _}, _From, #state{leader=Leader}=State) ->
     Reply = {error, {redirect, Leader}},
     {reply, Reply, follower, State};
 
-follower({op, _Command}, _From, #state{me=Me, config=Config,
-                                       leader=undefined}=State) ->
+follower({op, _Command}, _From, #state{me=Me, config=Config, leader=undefined}=State) ->
     kvs:info(?MODULE,"RAFTER FOLLOWER read_op~n",[]),
     Error = no_leader_error(Me, Config),
     {reply, {error, Error}, follower, State};
@@ -266,7 +242,7 @@ candidate(#vote{success=false, from=From}, #state{responses=Responses}=State) ->
 %% Sweet, someone likes us! Do we have enough votes to get elected?
 candidate(#vote{success=true, from=From}, #state{responses=Responses, me=Me,
                                                  config=Config}=State) ->
-    kvs:info(?MODULE,"RAFTER CANDIDATE #vote~n",[]),
+    kvs:info(?MODULE,"RAFTER CANDIDATE #vote ~p~n",[Config]),
     NewResponses = dict:store(From, true, Responses),
     case cr_config:quorum(Me, Config, NewResponses) of
         true ->
@@ -327,6 +303,10 @@ candidate(#append_entries{term=RequestTerm}, _From, #state{term=CurrentTerm}=Sta
 candidate(#append_entries{}, _From, State) ->
     io:format("RAFTER CANDIDATE #append~n"),
     {next_state, candidate, State};
+
+candidate({set_config, {NewServer, AddRemove}}, From, #state{me=Me, followers=F, term=Term, config=C}=State) ->
+%    change_config(NewServer, AddRemove, From, Me, F, Term, C, State, candidate);
+    {reply, {error, election_in_progress}, candidate, State};
 
 %% We are in the middle of an election.
 %% Leader should always be undefined here.
@@ -441,19 +421,8 @@ leader(#request_vote{}, _From, #state{me=Me, term=CurrentTerm}=State) ->
     io:format("RAFTER LEADER #req_vote~n"),
     {reply, Rpy, leader, State};
 
-leader({set_config, {Id, NewServers}}, From,
-       #state{me=Me, followers=F, term=Term, config=C}=State) ->
-    io:format("RAFTER LEADER set_config~n"),
-    case cr_config:allow_config(C, NewServers) of
-        true ->
-            {Followers, Config} = reconfig(Me, F, C, NewServers, State),
-            Entry = #rafter_entry{type=config, term=Term, cmd=Config},
-            NewState0 = State#state{config=Config, followers=Followers},
-            NewState = append(Id, From, Entry, NewState0, leader),
-            {next_state, leader, NewState};
-        Error ->
-            {reply, Error, leader, State}
-    end;
+leader({set_config, {NewServer, AddRemove}}, From, #state{me=Me, followers=F, term=Term, config=C}=State) ->
+    change_config(NewServer, AddRemove, From, Me, F, Term, C, State, leader);
 
 %% Handle client requests
 leader({read_op, {Id, Command}}, From, State) ->
@@ -471,6 +440,26 @@ leader({op, {Id, Command}}, From,
 %%=============================================================================
 %% Internal Functions
 %%=============================================================================
+
+change_config(NewServer, AddRemove, From, Me, F, Term, C, State, FSMState) ->
+    Id = os:timestamp(),
+    #config{newservers=PreviousConfiguration} = C,
+    WithoutNew = lists:delete(NewServer, sets:to_list(sets:from_list(PreviousConfiguration))),
+    NewServers = case AddRemove of
+                            add -> [NewServer|WithoutNew];
+                         remove -> WithoutNew end,
+    kvs:info(?MODULE,"RAFTER LEADER set_config~n~p~n~p~n",[C,NewServers]),
+    case cr_config:allow_config(C, NewServers) of
+        true ->
+            {Followers, Config} = reconfig(Me, F, C, NewServers, State),
+            Entry = #rafter_entry{type=config, term=Term, cmd=Config},
+            NewState0 = State#state{followers=Followers},
+            NewState = append(Id, From, Entry, NewState0, leader),
+            kvs:info(?MODULE,"RAFTER new config: ~p~n",[Config]),
+            {next_state, FSMState, NewState};
+        Error ->
+            kvs:info(?MODULE,"set_config error: ~p~n",[Error]),
+            {reply, Error, FSMState, State} end.
 
 no_leader_error(Me, Config) ->
     case cr_config:has_vote(Me, Config) of

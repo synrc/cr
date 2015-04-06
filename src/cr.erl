@@ -14,7 +14,7 @@ send(Pid, Message) when is_pid(Pid)  -> gen_fsm:send_event(Pid, {out, Message}).
 
 config()       -> {ok,Peers} = application:get_env(cr,peers),
                   N = lists:map(fun({N,_,_,_})->N end,Peers),
-                  #config{state=transitional,oldservers=N,newservers=N}.
+                  #config{state=stable,oldservers=N,newservers=N}.
 local(Object)  -> {I,N}=lists:keyfind(cr:nodex(node()),2,cr:chain(Object)),
                   {I,P,_,_}=lists:keyfind(I,1,supervisor:which_children(vnode_sup)), P.
 secret()       -> application:get_env(cr,secret,<<"ThisIsClassified">>).
@@ -119,7 +119,7 @@ rpc(Value) -> Value.
 
 clean() -> kvs:destroy(), kvs:join().
 
-log_modules() -> [cr,cr_log].
+log_modules() -> [cr,cr_log,cr_rafter,cr_heart].
 
 sup() -> [{T,Pid}||{T,Pid,_,_}<-supervisor:which_children(cr_sup)].
 
