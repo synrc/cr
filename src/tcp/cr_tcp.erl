@@ -1,6 +1,6 @@
 -module(cr_tcp).
 -description('prim_inet based TCP non-blocking listener').
--copyright('Maxim Sokhatsky').
+-copyright('Synrc Research Center s.r.o.').
 -behaviour(gen_server).
 -include("cr.hrl").
 -export(?GEN_SERVER).

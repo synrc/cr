@@ -1,4 +1,5 @@
 -module(cr_rafter).
+-author('Andrew J. Stone').
 -description('RAFT protocol').
 -behaviour(gen_fsm).
 -include("rafter.hrl").

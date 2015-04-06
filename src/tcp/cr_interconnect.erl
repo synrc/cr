@@ -1,5 +1,5 @@
 -module(cr_interconnect).
--copyright('Maxim Sokhatsky').
+-copyright('Synrc Research Center s.r.o.').
 -include("cr.hrl").
 -compile(export_all).
 -record(state, {succ,pred,port,name,socket,module,nodes}).

@@ -1,5 +1,6 @@
 -module(cr_hash).
 -description('Consistent Hash Ring').
+-copyright('Synrc Research Center s.r.o.').
 -compile(export_all).
 -define(RINGTOP, trunc(math:pow(2,160)-1)). % SHA-1 space
 

@@ -1,11 +1,15 @@
 -module(cr_heart).
 -description('Heart Monitor').
--copyright('Maxim Sokhatsky').
+-author('Maxim Sokhatsky').
+-copyright('Synrc Research Center s.r.o.').
 -include("cr.hrl").
 -include("rafter.hrl").
 -compile(export_all).
 -record(state, {name,nodes,timers}).
 -export(?GEN_SERVER).
+
+%% Heart Monitor hear module is a single process monitoring other cluster peers.
+%% The Configuration of Ring is tracked by RAFT protocol and its log.
 
 start_link(Name,Nodes) ->
     gen_server:start_link(?MODULE, [Name,Nodes], []).

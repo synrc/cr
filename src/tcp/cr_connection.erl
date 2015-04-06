@@ -1,5 +1,5 @@
 -module(cr_connection).
--copyright('Maxim Sokhatsky').
+-copyright('Synrc Research Center s.r.o.').
 -include("cr.hrl").
 -behaviour(gen_fsm).
 -compile(export_all).

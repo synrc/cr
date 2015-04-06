@@ -1,12 +1,16 @@
 -module(cr_vnode).
 -description('Ring Replica').
--copyright('Maxim Sokhatsky').
+-author('Maxim Sokhatsky').
+-copyright('Synrc Research Center s.r.o.').
 -include("cr.hrl").
 -include_lib("kvs/include/kvs.hrl").
 -include_lib("db/include/transaction.hrl").
 -compile(export_all).
 -record(state, {name,nodes,storage,latency={inf,0,0,0}}). % latency {min,max,avg}
 -export(?GEN_SERVER).
+
+%% Ring Replica vnode is single point of execution inside CR DHT.
+%% Each Node in Cluster has several replica vnodes.
 
 start_link(Name,Storage) ->
     gen_server:start_link(?MODULE, [Name,Storage], []).

@@ -53,6 +53,12 @@ make console NAME=cr2
 make console NAME=cr3
 ```
 
+Licenses
+--------
+
+rafter and gen_paxos are distributed under the terms of
+Apache 2.0 http://www.apache.org/licenses/LICENSE-2.0.html
+
 Credits
 -------
 
