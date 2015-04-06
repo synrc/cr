@@ -30,7 +30,6 @@ hacked parties or any types of compromising the transaction objects.
 For banking applications the byzantine fault tolerance is desired,
 despite it affects the latency.
 
-
 Features
 --------
 
@@ -43,6 +42,8 @@ Features
 * High-performance non-blocking TCP acceptor
 * Separate endpoints for HEART, CLIENT and SERVER protocols
 * Pure, clean and understandable codebase
+* Article about CR implementation details: https://synrc.com/apps/cr/doc/cr.htm
+* Business Processing Erlang book: https://synrc.com/apps/bpe/doc/book.pdf
 
 Launch
 ------
