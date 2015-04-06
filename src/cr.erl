@@ -74,12 +74,12 @@ log_size({I,N}) ->
 
 dump() ->
      {N,Nodes} = cr:ring(),
-     io:format("~52w ~3w ~2w ~10w ~8w ~14w~n",[vnode,i,n,top,log,latency]),
+     io:format("~52w ~3w ~2w ~10w ~11w~n",[vnode,i,n,top,latency]),
    [ begin
      {A,B} = rpc(rpc:call(cr:peer({I,N}),cr,log_size,[{I,N}])),
      {Min,Max,Avg} = latency({I,N}),
      L = lists:concat([Min,'/',Max,'/',Avg]),
-     io:format("~52w ~3w ~2w ~10w ~8w ~14s~n",[I,P,N,A,B,L])
+     io:format("~52w ~3w ~2w ~10w ~11s~n",[I,P,N,A,L])
      end || {{I,N},P} <- lists:zip(lists:keydelete(0,1,Nodes),lists:seq(1,length(Nodes)-1))],
      ok.
 
