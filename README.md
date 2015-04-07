@@ -6,7 +6,7 @@ Byzantine Chain Replication Database
 In banking system demands are very tight. Database
 should be at least tripled, stand-by nodes should pick up
 master reads from failover node, writes should be
-accepted on a reasonble quorum, failover must be followed by recovery, database
+accepted on a reasonable quorum, failover must be followed by recovery, database
 should be able to scale even with the RAM/DISC limitations.
 
 No data should be treated as written otherwise that commited to all replicas.
