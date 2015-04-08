@@ -8,6 +8,10 @@
 -include("rafter_opts.hrl").
 -export(?GEN_SERVER).
 
+show() -> show(node()).
+show(Node) ->
+  [ {I,element(2,cr_log:get_entry(Node,I))} || I <- lists:seq(1,cr_log:get_last_index(Node)) ].
+
 %%=============================================================================
 %% Logfile Structure
 %%=============================================================================
@@ -63,7 +67,6 @@
     meta :: #meta{},
     last_entry :: #rafter_entry{},
     index = 0 :: index(),
-    term = 0 :: non_neg_integer(),
     hints :: ets:tid(),
     hint_prunes = 0 :: non_neg_integer(),
 
@@ -90,9 +93,6 @@
 -define(ETS_OPTS, [named_table, ordered_set, protected]).
 -endif.
 
-show() -> show(node()).
-show(Node) ->
-  [ {I,element(2,cr_log:get_entry(Node,I))} || I <- lists:seq(1,cr_log:get_last_index(Node)) ].
 
 %%====================================================================
 %% API
@@ -102,22 +102,19 @@ entry_to_binary(#rafter_entry{type=noop, term=Term, index=Index, cmd=noop}) ->
 entry_to_binary(#rafter_entry{type=config, term=Term, index=Index, cmd=Data}) ->
     entry_to_binary(?CONFIG, Term, Index, Data);
 entry_to_binary(#rafter_entry{type=op, term=Term, index=Index, cmd=Data}) ->
-    entry_to_binary(?OP, Term, Index, Data);
-entry_to_binary(#rafter_entry{type=OP, term=Term, index=Index, cmd=Data}) ->
-    entry_to_binary(OP, Term, Index, binary_to_term(Data)).
+    entry_to_binary(?OP, Term, Index, Data).
 
 entry_to_binary(Type, Term, Index, Data) ->
     BinData = term_to_binary(Data),
     B0 = <<Type:8, Term:64, Index:64, (byte_size(BinData)):32, BinData/binary>>,
-    <<Sha1:20/binary,_/binary>> = crypto:hmac(sha256, cr:secret(), B0),
+    Sha1 = crypto:hash(sha, B0),
     <<Sha1/binary, B0/binary>>.
 
 binary_to_entry(<<Sha1:20/binary, Type:8, Term:64, Index:64, Size:32, Data/binary>>) ->
     %% We want to crash on badmatch here if if our log is corrupt
     %% TODO: Allow an operator to repair the log by truncating at that point
     %% or repair each entry 1 by 1 by consulting a good log.
-    <<Sha1:20/binary,_/binary>> = crypto:hmac(sha256, cr:secret(),
-                       <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
+    Sha1 = crypto:hash(sha, <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
     binary_to_entry(Type, Term, Index, Data).
 
 binary_to_entry(?NOOP, Term, Index, _Data) ->
@@ -125,12 +122,10 @@ binary_to_entry(?NOOP, Term, Index, _Data) ->
 binary_to_entry(?CONFIG, Term, Index, Data) ->
     #rafter_entry{type=config, term=Term, index=Index, cmd=binary_to_term(Data)};
 binary_to_entry(?OP, Term, Index, Data) ->
-    #rafter_entry{type=op, term=Term, index=Index, cmd=binary_to_term(Data)};
-binary_to_entry(OP, Term, Index, Data) ->
-    #rafter_entry{type=OP, term=Term, index=Index, cmd=Data}.
+    #rafter_entry{type=op, term=Term, index=Index, cmd=binary_to_term(Data)}.
 
 start_link(Peer, Opts) ->
-    gen_server:start_link({local, logname(Peer)},?MODULE, [Peer, Opts], []).
+    gen_server:start_link({local, logname(Peer)}, ?MODULE, [Peer, Opts], []).
 
 stop(Peer) ->
     gen_server:cast(logname(Peer), stop).
@@ -141,16 +136,16 @@ stop(Peer) ->
 check_and_append(Peer, Entries, Index) ->
     gen_server:call(logname(Peer), {check_and_append, Entries, Index}).
 
+%% @doc append/2 gets called in the leader state only, and assumes a
+%% truncated log.
+append(Peer, Entries) ->
+    gen_server:call(logname(Peer), {append, Entries}).
+
 kvs_log(Peer, Operation) ->
     gen_server:call(logname(Peer), {kvs_log, Operation}).
 
 kvs_replay(Peer, Operation, Storage, Status) ->
     gen_server:call(logname(Peer), {kvs_replay, Operation, Storage, Status}).
-
-%% @doc append/2 gets called in the leader state only, and assumes a
-%% truncated log.
-append(Peer, Entries) ->
-    gen_server:call(logname(Peer), {append, Entries}).
 
 get_config(Peer) ->
     gen_server:call(logname(Peer), get_config).
@@ -195,14 +190,13 @@ init([Name, #rafter_opts{logdir = Logdir}]) ->
     {ok, LogFile} = file:open(LogName, [append, read, binary, raw]),
     {ok, #file_info{size=Size}} = file:read_file_info(LogName),
     {ok, Meta} = read_metadata(MetaName, Size),
-    {ConfigLoc, Config, Term, Index, WriteLocation, Version} = init_file(LogFile, Size),
+    {ConfigLoc, Config, _Term, Index, WriteLocation, Version} = init_file(LogFile, Size),
     LastEntry = find_last_entry(LogFile, WriteLocation),
-    HintsTable = Name,
+    HintsTable = list_to_atom("rafter_hints_" ++ atom_to_list(Name)),
     {ok, #state{logfile=LogFile,
                 version=Version,
                 meta_filename=MetaName,
                 write_location=WriteLocation,
-                term=Term,
                 index=Index,
                 meta=Meta,
                 config=Config,
@@ -211,13 +205,7 @@ init([Name, #rafter_opts{logdir = Logdir}]) ->
                 hints=ets:new(HintsTable, ?ETS_OPTS)}}.
 
 format_status(_, [_, State]) ->
-    Data = lager:pr(State, ?MODULE),
-    [{data, [{"StateData", Data}]}].
-
-handle_call({append, Entries}, _From, #state{logfile=File}=State) ->
-    NewState = write_entries(File, Entries, State),
-    Index = NewState#state.index,
-    {reply, {ok, Index}, NewState};
+    [{data, [{"StateData", State}]}].
 
 handle_call({kvs_log, Operation}, _From, #state{logfile=File}=State) ->
     {reply, kvs:add(Operation#operation{id=kvs:next_id(operation,1)}), State};
@@ -225,6 +213,14 @@ handle_call({kvs_log, Operation}, _From, #state{logfile=File}=State) ->
 handle_call({kvs_replay, Operation, {state,Name,Nodes,Storage,L}, Status}, _From, #state{}=State) ->
     Storage:dispatch(Operation#operation.body,{state,Name,Nodes,Storage,L}),
     {reply, ok, State};
+
+%% Leader Append. Entries do NOT have Indexes, as they are unlogged entries as a
+%% result of client operations. Appends are based on the current index of the log.
+%% Just append to the next location in the log for each entry.
+handle_call({append, Entries}, _From, #state{logfile=File}=State) ->
+    NewState = append_entries(File, Entries, State),
+    Index = NewState#state.index,
+    {reply, {ok, Index}, NewState};
 
 handle_call(get_config, _From, #state{config=Config}=State) ->
     {reply, Config, State};
@@ -245,20 +241,24 @@ handle_call({set_metadata, VotedFor, Term}, _, #state{meta_filename=Name}=S) ->
     ok = write_metadata(Name, Meta),
     {reply, ok, S#state{meta=Meta}};
 
+%% Follower append. Logs may not match. Write the first entry at the given index
+%% and reset the current index maintained in #state{}. Note that Entries
+%% actually contain correct indexes, since they are sent from the leader.
+%% Return the last index written.
 handle_call({check_and_append, Entries, Index}, _From, #state{logfile=File,
                                                               hints=Hints}=S) ->
     Loc0 = closest_forward_offset(Hints, Index),
     {Loc, Count} = get_pos(File, Loc0, Index),
     State = update_counters(Count, 0, S),
-    #state{index=NewIndex}=NewState = maybe_append(Index, Loc, Entries, State),
+    #state{index=NewIndex}=NewState = maybe_append(Loc, Entries, State),
     {reply, {ok, NewIndex}, NewState};
 
 handle_call({get_entry, Index}, _From, #state{logfile=File,
                                               hints=Hints}=State0) ->
     Loc = closest_forward_offset(Hints, Index),
-    {Res, NewState} = 
+    {Res, NewState} =
     case find_entry(File, Loc, Index) of
-        {not_found, Count} -> 
+        {not_found, Count} ->
             State = update_counters(Count, 0, State0),
             {not_found, State};
         {Entry, NextLoc, Count} ->
@@ -278,9 +278,9 @@ update_counters(Distance, Prunes, #state{hint_prunes=Prunes0,
 -spec closest_forward_offset(ets:tid(), index()) -> offset().
 closest_forward_offset(Hints, Index) ->
     case ets:prev(Hints, Index) of
-        '$end_of_table' -> 
+        '$end_of_table' ->
             ?FILE_HEADER_SIZE;
-        Key -> 
+        Key ->
             [{Key, Loc0}] = ets:lookup(Hints, Key),
             Loc0
     end.
@@ -301,7 +301,7 @@ add_hint(Hints, Index, Loc) ->
 %% Delete every 10th hint
 delete_hints(Hints) ->
     L = ets:tab2list(Hints),
-    {_, ToDelete} =  
+    {_, ToDelete} =
     lists:foldl(fun({Index, _}, {Count, Deleted}) when Count rem 10 =:= 0 ->
                        {Count+1, [Index | Deleted]};
                    ({_, _}, {Count, Deleted}) ->
@@ -329,29 +329,65 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Functions
 %%====================================================================
 
-maybe_append(_, _, [], State) ->
+maybe_append(_, [], State) ->
     State;
-maybe_append(Index, eof, [Entry | Entries], State) ->
+maybe_append(eof, [Entry | Entries], State) ->
     NewState = write_entry(Entry, State),
-    maybe_append(Index+1, eof, Entries, NewState);
-maybe_append(Index, Loc, [#rafter_entry{term=Term}=Entry | Entries],
-             State=#state{logfile=File}) ->
+    maybe_append(eof, Entries, NewState);
+maybe_append(Loc, [Entry | Entries], State=#state{logfile=File}) ->
+    #rafter_entry{index=Index, term=Term}=Entry,
     case read_entry(File, Loc) of
         {entry, Data, NewLocation} ->
             case binary_to_entry(Data) of
+                %% We already have this entry in the log. Continue.
                 #rafter_entry{index=Index, term=Term} ->
-                    maybe_append(Index+1, NewLocation, Entries, State);
+                    maybe_append(NewLocation, Entries, State);
                 #rafter_entry{index=Index, term=_} ->
-                    ok = truncate(File, Loc),
-                    State1 = State#state{write_location=Loc},
-                    State2 = write_entry(Entry, State1),
-                    maybe_append(Index + 1, eof, Entries, State2)
+                    NewState = truncate_and_write(File, Loc, Entry, State),
+                    maybe_append(eof, Entries, NewState)
             end;
         eof ->
-            ok = truncate(File, Loc),
-            State1 = State#state{write_location=Loc},
-            State2 = write_entry(Entry, State1),
-            maybe_append(Index+1, eof, Entries, State2)
+            NewState = truncate_and_write(File, Loc, Entry, State),
+            maybe_append(eof, Entries, NewState)
+    end.
+
+truncate_and_write(File, Loc, Entry, State0) ->
+    ok = truncate(File, Loc),
+    State1 = maybe_reset_config(File, Loc, State0),
+    State2 = State1#state{write_location=Loc},
+    write_entry(Entry, State2).
+
+-spec maybe_reset_config(file:io_device(), non_neg_integer(), #state{}) ->
+    #state{}.
+maybe_reset_config(File, Loc, #state{config_loc=ConfigLoc}=State) ->
+    case ConfigLoc >= Loc of
+        true ->
+            reset_config(File, Loc, State);
+        false ->
+            State
+    end.
+
+-spec reset_config(file:io_device(), non_neg_integer(), #state{}) -> #state{}.
+reset_config(File, Loc, State) ->
+    case Loc of
+        ?FILE_HEADER_SIZE ->
+            %% Empty file, so reset to blank config
+            State#state{config_loc=0, config=#config{}};
+        _ ->
+            %% Get config from the previous trailer
+            TrailerLoc = Loc - ?TRAILER_SIZE,
+            {ok, Trailer} = file:pread(File, TrailerLoc, ?TRAILER_SIZE),
+            <<CRC:32, Rest/binary>> = Trailer,
+            %% validate checksum, fail fast.
+            CRC = erlang:crc32(Rest),
+            <<ConfigLoc:64, _/binary>> = Rest,
+            case ConfigLoc of
+                0 ->
+                    State#state{config_loc=0, config=#config{}};
+                _ ->
+                    {ok, Config} = read_config(File, ConfigLoc),
+                    State#state{config_loc=ConfigLoc, config=Config}
+            end
     end.
 
 logname(IndexNode) -> list_to_atom(lists:concat(["log:",IndexNode])).
@@ -383,36 +419,44 @@ make_trailer(EntryStart, ConfigStart) ->
     Crc = erlang:crc32(T),
     <<Crc:32, T/binary>>.
 
-write_entries(File, Entries, State) ->
-    NewState = lists:foldl(fun write_entry/2, State, Entries),
+append_entries(File, Entries, State) ->
+    NewState = lists:foldl(fun append_entry/2, State, Entries),
     ok = file:sync(File),
     NewState.
 
-write_entry(#rafter_entry{type=Type, cmd=Cmd}=Entry, S=#state{write_location=Loc,
-                                                              config=Config,
-                                                              config_loc=ConfigLoc,
-                                                              index=Index,
-                                                              logfile=File}) ->
+%% Append an entry at the next location in the log. The entry does not yet have an
+%% index, so add one.
+append_entry(Entry, State=#state{index=Index}) ->
     NewIndex = Index + 1,
     NewEntry = Entry#rafter_entry{index=NewIndex},
-    BinEntry = entry_to_binary(NewEntry),
-    {NewConfigLoc, NewConfig, Trailer} =
-    case Type of
-        config ->
-            {Loc, Cmd, make_trailer(Loc, Loc)};
-        _ ->
-            {ConfigLoc, Config, make_trailer(Loc, ConfigLoc)}
-    end,
+    write_entry(NewEntry, State).
+
+%% Precondition: each entry must have an index at this point.
+write_entry(Entry, State) ->
+    #rafter_entry{index=Index, type=Type, cmd=Cmd}=Entry,
+    #state{write_location=Loc, config=Config, config_loc=ConfigLoc,
+           logfile=File} = State,
+    BinEntry = entry_to_binary(Entry),
+    {NewConfigLoc, NewConfig} =
+        maybe_update_config(Type, Loc, Cmd, ConfigLoc, Config),
+    Trailer = make_trailer(Loc, NewConfigLoc),
     ok = file:write(File, <<BinEntry/binary, Trailer/binary>>),
     NewLoc = Loc + byte_size(BinEntry) + ?TRAILER_SIZE,
-    S#state{index=NewIndex,
+    State#state{index=Index,
             config=NewConfig,
             write_location=NewLoc,
             config_loc=NewConfigLoc,
-            last_entry=NewEntry}.
+            last_entry=Entry}.
+
+maybe_update_config(config, NewConfigLoc, NewConfig, _, _) ->
+    {NewConfigLoc, NewConfig};
+maybe_update_config(_Type, _, _, CurConfigLoc, CurConfig) ->
+    {CurConfigLoc, CurConfig}.
 
 read_config(File, Loc) ->
-    {ok, cr:config()}.
+    {entry, Data, _} = read_entry(File, Loc),
+    #rafter_entry{type=config, cmd=Config} = binary_to_entry(Data),
+    {ok, Config}.
 
 %% TODO: Write to a tmp file then rename so the write is always atomic and the
 %% metadata file cannot become partially written.
@@ -426,7 +470,7 @@ read_metadata(Filename, FileSize) ->
         {error, enoent} when FileSize =< ?FILE_HEADER_SIZE ->
             {ok, #meta{}};
         {error, Reason} ->
-            kvs:info(?MODULE,"Failed to open metadata file: ~p. Reason = ~p~n",
+            io:format("Failed to open metadata file: ~p. Reason = ~p~n",
                 [Filename, Reason]),
             {ok, #meta{}}
     end.
@@ -451,7 +495,7 @@ repair_file(File, Size) ->
             #rafter_entry{term=Term, index=Index} = binary_to_entry(Data),
             {ok, ConfigStart, Term, Index, TruncateAt};
         not_found ->
-            kvs:info(?MODULE,"NOT FOUND: Size = ~p~n", [Size]),
+            io:format("NOT FOUND: Size = ~p~n", [Size]),
             ok = truncate(File, 0),
             empty_file
     end.
@@ -491,7 +535,7 @@ find_magic_number(File, Loc) ->
     {Block, Start} = read_block(File, Loc),
     case find_last_magic_number_in_block(Block) of
         {ok, Offset} ->
-            kvs:info(?MODULE,"Magic Number found at ~p~n", [Start+Offset]),
+            io:format("Magic Number found at ~p~n", [Start+Offset]),
             {ok, Start+Offset};
         not_found ->
             case Start of
@@ -514,7 +558,9 @@ find_last_magic_number_in_block(Block) ->
             {ok, Index - 1}
     end.
 
-get_pos(File, Loc, Index) -> get_pos(File, Loc, Index, 0).
+get_pos(File, Loc, Index) ->
+    get_pos(File, Loc, Index, 0).
+
 get_pos(File, Loc, Index, Count) ->
     case file:pread(File, Loc, ?HEADER_SIZE) of
         {ok, <<_Sha1:20/binary, _Type:8, _Term:64, Index:64, _DataSize:32>>} ->
@@ -526,7 +572,9 @@ get_pos(File, Loc, Index, Count) ->
     end.
 
 %% @doc Find an entry at the given index in a file. Search forward from Loc.
-find_entry(File, Loc, Index) -> find_entry(File, Loc, Index, 0).
+find_entry(File, Loc, Index) ->
+    find_entry(File, Loc, Index, 0).
+
 find_entry(File, Loc, Index, Count) ->
     case file:pread(File, Loc, ?HEADER_SIZE) of
         {ok, <<_Sha1:20/binary, _Type:8, _Term:64, Index:64, _DataSize:32>>=Header} ->
@@ -574,10 +622,111 @@ read_data(File, Location, <<Sha1:20/binary, Type:8, Term:64, Index:64, Size:32>>
     case file:pread(File, Location, Size) of
         {ok, Data} ->
             %% Fail-fast Integrity check. TODO: Offer user repair options?
-            <<Sha1:20/binary,_/binary>> =
-            crypto:hmac(sha256, cr:secret(), <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
+            Sha1 = crypto:hash(sha, <<Type:8, Term:64, Index:64, Size:32, Data/binary>>),
             NewLocation = Location + Size + ?TRAILER_SIZE,
             {entry, <<H/binary, Data/binary>>, NewLocation};
         eof ->
             eof
     end.
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-define(PEER, test).
+
+cleanup() ->
+    os:cmd("rm -rf /tmp/rafter_test*").
+
+%% REGRESSION: - see https://github.com/andrewjstone/rafter/pull/32
+log_overwrite_test() ->
+    cleanup(),
+    Opts = #rafter_opts{logdir="/tmp"},
+    {ok, _Pid} = rafter_log:start_link(?PEER, Opts),
+    assert_empty(),
+
+    %% We are appending Entry1 as the leader, so it has no index.
+    Entry1 = #rafter_entry{type=config, term=1, index=undefined,
+                           cmd=#config{state=stable}},
+    assert_leader_append(1, 1, Entry1),
+    ConfigLoc0 = assert_stable_config(),
+
+    Entry2 = #rafter_entry{type=noop, term=1, index=undefined, cmd=noop},
+    assert_leader_append(2, 1, Entry2),
+    ConfigLoc1 = assert_stable_config(),
+    ?assertEqual(ConfigLoc0, ConfigLoc1),
+
+    %% A new leader takes over and this log gets its entry overwritten.
+    %% In reality index 1 will always be a #config{}, but this validates the
+    %% test that config gets reset.
+    Entry = #rafter_entry{type=noop, term=2, index=1, cmd=noop},
+    assert_follower_append(Entry),
+    assert_blank_config(),
+
+    %% This peer becomes leader again and appends 2 configs
+    Entry3 = #rafter_entry{type=config, term=3, cmd=#config{state=stable}},
+    assert_leader_append(2, 3, Entry3),
+    ConfigLoc2 = assert_stable_config(),
+
+    Entry4 = #rafter_entry{type=config, term=3, cmd=#config{state=stable}},
+    assert_leader_append(3, 3, Entry4),
+    ConfigLoc3 = assert_stable_config(),
+    ?assertNotEqual(ConfigLoc2, ConfigLoc3),
+
+    %% A new leader takes over and truncates the last config
+    Entry5 = #rafter_entry{type=noop, term=4, index=3, cmd=noop},
+    assert_follower_append(Entry5),
+    ConfigLoc4 = assert_stable_config(),
+    ?assertEqual(ConfigLoc2, ConfigLoc4),
+    Index = rafter_log:get_last_index(?PEER),
+    ?assertEqual(Index, 3),
+    {ok, Entry6} = rafter_log:get_last_entry(?PEER),
+    ?assertEqual(Entry5, Entry6),
+
+    %% A new leader takes over and truncates the last stable config
+    %% New config is at position 0
+    Entry7 = #rafter_entry{type=noop, term=5, index=2, cmd=noop},
+    assert_follower_append(Entry7),
+    assert_blank_config(),
+    Index2 = rafter_log:get_last_index(?PEER),
+    ?assertEqual(Index2, 2),
+    {ok, Entry8} = rafter_log:get_last_entry(?PEER),
+    ?assertEqual(Entry7, Entry8),
+
+    rafter_log:stop(?PEER).
+
+assert_leader_append(ExpectedIndex, ExpectedTerm, Entry) ->
+    {ok, Index} = rafter_log:append(?PEER, [Entry]),
+    ?assertEqual(ExpectedIndex, Index),
+    {ok, Entry1} = rafter_log:get_entry(?PEER, Index),
+    {ok, Entry1} = rafter_log:get_last_entry(?PEER),
+    Index = rafter_log:get_last_index(?PEER),
+    ?assertEqual(Entry1#rafter_entry.index, ExpectedIndex),
+    ?assertEqual(Entry1#rafter_entry.term, ExpectedTerm).
+
+assert_follower_append(Entry) ->
+    %% Note that follower appends always have indexes since they are sent
+    %% from the leader who has already written the entry to its log.
+    Index = Entry#rafter_entry.index,
+    {ok, Index} = rafter_log:check_and_append(?PEER, [Entry], Index),
+    {ok, Entry1} = rafter_log:get_entry(?PEER, Index),
+    ?assertEqual(Entry, Entry1).
+
+assert_blank_config() ->
+    Config = rafter_log:get_config(?PEER),
+    ?assertEqual(blank, Config#config.state),
+    State = sys:get_state(logname(?PEER)),
+    ?assertEqual(State#state.config_loc, 0).
+
+assert_stable_config() ->
+    Config = rafter_log:get_config(?PEER),
+    ?assertEqual(stable, Config#config.state),
+    State = sys:get_state(logname(?PEER)),
+    ConfigLoc = State#state.config_loc,
+    ?assertNotEqual(ConfigLoc, 0),
+    ConfigLoc.
+
+assert_empty() ->
+    ?assertEqual({ok, not_found}, rafter_log:get_last_entry(?PEER)),
+    ?assertEqual(0, rafter_log:get_last_index(?PEER)),
+    assert_blank_config().
+
+-endif.
