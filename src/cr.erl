@@ -121,6 +121,36 @@ clean() -> kvs:destroy(), kvs:join().
 
 log_modules() -> [cr,cr_log,cr_rafter,cr_heart].
 
-sup() -> [{T,Pid}||{T,Pid,_,_}<-supervisor:which_children(cr_sup)].
-
+sup()   -> [{T,Pid}||{T,Pid,_,_}<-supervisor:which_children(cr_sup)].
+heart() -> [{_,P,_,_}]=supervisor:which_children(heart_sup), gen_server:call(P,{heart}).
 local() -> [{I,P}||{I,P,_,_} <- supervisor:which_children(vnode_sup)].
+
+% Integrity Functions
+
+% consensus_log  checks that the length of RAFT log is the same on all nodes.
+% node_log       checks that the sum of chains of all vnodes equals the the overal operations counts.
+% operation_log  checks that on all nodes all operations logs are ok
+% cluster_status checks that all logs on all nodes are ok
+
+consensus_log() ->
+      Entries = cr_log:get_last_index(node()),
+      case lists:all(fun({H,_,_,_}) -> rpc:call(H,cr_log,get_last_index,[H]) == Entries end,
+            cr:peers()) of true -> {ok,Entries}; false -> {error,consensus_log} end.
+
+
+node_log() ->
+      Operations = length(kvs:all(operation)),
+      case lists:sum([ begin length(kvs:entries(kvs:get(log,Id),operation,-1)) == Num, Num end
+            || {log,Id,_,Num,_,_} <- kvs:all(log) ]) == Operations of
+          true -> {ok,Operations}; false -> {error,node_log} end.
+
+
+operation_log() ->
+      Operations = length(kvs:all(operation)),
+      case lists:all(fun({H,_,_,_}) -> case rpc:call(H,cr,node_log,[]) of
+                                            {ok,Operations} -> true;
+                                                         _ -> false end end,
+            cr:peers()) of true -> {ok,Operations}; false -> {error,operation_log} end.
+
+
+cluster_status() -> {ok,_} = consensus_log(), {ok,_} = operation_log().

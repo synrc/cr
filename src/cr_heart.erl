@@ -8,7 +8,7 @@
 -record(state, {name,nodes,timers}).
 -export(?GEN_SERVER).
 
-%% Heart Monitor hear module is a single process monitoring other cluster peers.
+%% Heart Monitor module is a single process, monitoring other cluster peers.
 %% The Configuration of Ring is tracked by RAFT protocol and its log.
 
 start_link(Name,Nodes) ->
@@ -88,6 +88,9 @@ handle_info(_Info, State) ->
     kvs:info(?MODULE,"HEART: Info ~p~n",[_Info]),
     {noreply, State}.
 
+handle_call({heart},_,Proc) ->
+    {reply,Proc,Proc};
+
 handle_call(Request,_,Proc) ->
     kvs:info(?MODULE,"HEART: Call ~p~n",[Request]),
     {reply,ok,Proc}.
@@ -104,4 +107,3 @@ change(undefined,_,_,_) -> true;
 change(_,undefined,_,_) -> true;
 change(A,A,_,_) -> false;
 change(_,_,_,_) -> true.
-
