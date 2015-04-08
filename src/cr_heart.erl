@@ -72,9 +72,11 @@ handle_info({timer,ping,{A,P},N,S}, State=#state{timers=Timers}) ->
 
     case change(S,Online,N,Servers) of
          true ->
-                 kvs:info(?MODULE,"Server Config Changed S/T ~p ~p~n",[{S,Online},{N,Operation}]),
                  try
-                      cr_rafter:set_config(node(),{N,Operation})
+                      case cr_rafter:set_config(node(),{N,Operation}) of
+                           {error,_} -> skip;
+                                  _ ->  kvs:info(?MODULE,"Server Config Changed S/T ~p ~p~n",
+                                                         [{S,Online},{N,Operation}]) end
                  catch
                       _:_ -> kvs:info(?MODULE,"CONFIG ERROR",[]) end,
                  ok;
