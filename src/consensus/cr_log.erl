@@ -8,7 +8,7 @@
 -include("rafter_opts.hrl").
 -export(?GEN_SERVER).
 
-show() -> show(node()).
+show() -> show(cr:node()).
 show(Node) ->
   [ {I,element(2,cr_log:get_entry(Node,I))} || I <- lists:seq(1,cr_log:get_last_index(Node)) ].
 

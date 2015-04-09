@@ -1,4 +1,6 @@
 -module(cr_app).
+-behaviour(application).
+-export([start/2, stop/1]).
 -copyright('Maxim Sokhatsky').
 -include("rafter_opts.hrl").
 -compile(export_all).
@@ -29,25 +31,27 @@ rafter({I,N},Nodes)      -> {N,{cr_rafter,start_link,
 
 init([Nodes,Opts]) ->
     {ok, {{one_for_one, 5, 60},
-              lists:flatten([ log({0,N},Nodes)    || {N,_,_,_} <- Nodes, N == node()]
-                         ++ [ rafter({0,N},Nodes) || {N,_,_,_} <- Nodes, N == node()]
+              lists:flatten([ log({0,N},Nodes)    || {N,_,_,_} <- Nodes, N == cr:node()]
+                         ++ [ rafter({0,N},Nodes) || {N,_,_,_} <- Nodes, N == cr:node()]
                          ++ [ protocol(O,Nodes) || O<-Opts ]
                          ++ [ pool(heart_sup) ]
                          ++ [ pool(vnode_sup) ]) }}.
 
 stop(_)    -> ok.
+start() -> start(normal,[]).
 start(_,_) ->
-    io:format("Node: ~p~n",[node()]),
+    io:format("Node: ~p~n",[cr:node()]),
     {ok,Peers}=application:get_env(cr,peers),
-    {N,P1,P2,P3}=lists:keyfind(node(),1,Peers),
+    {N,P1,P2,P3} = lists:keyfind(cr:node(),1,Peers),
     {_,VNodes} = cr:ring(),
     kvs:join(),
     Sup = supervisor:start_link({local, cr_sup}, ?MODULE,
                 [  Peers, [ { interconnect, P1, cr_interconnect },
                             { ping,         P2, cr_ping },
                             { client,       P3, cr_client } ]]),
-    [ start_vnode({Index,Node},Peers) || {Index,Node} <- VNodes, Node == cr:nodex(node()) ],
-    supervisor:start_child(heart_sup,heart(Peers)),
+    io:format("Supervision: ~p~n",[supervisor:which_children(cr_sup)]),
+    [ start_vnode({Index,Node},Peers) || {Index,Node} <- VNodes, Node == cr:nodex(cr:node()) ],
+    spawn(fun() -> supervisor:start_child(heart_sup,heart(Peers)) end),
     Sup.
 
 protocol({Name,Port,Mod},Nodes) ->

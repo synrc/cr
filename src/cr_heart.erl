@@ -17,11 +17,11 @@ start_link(Name,Nodes) ->
 init([Name,Nodes]) ->
 
     Timers = [ begin
-          [_,Addr]=string:tokens(atom_to_list(erlang:node()),"@"),
+          [_,Addr]=string:tokens(atom_to_list(cr:node()),"@"),
           {ok,Parsed}=inet:parse_address(Addr),
           Timer = erlang:send_after(1000,self(),{timer,ping,{Parsed,P2},Node,undefined}),
           {Node,Timer}
-      end || {Node,_,P2,_}<-Nodes],
+      end || {Node,_,P2,_}<-Nodes, Node /= cr:node()],
 
     kvs:info(?MODULE,"HEART PROTOCOL: started: ~p~n"
                                    "Nodes: ~p~n",[Name,Timers]),
@@ -49,7 +49,7 @@ handle_info({timer,ping,{A,P},N,S}, State=#state{timers=Timers}) ->
 
     %kvs:info(?MODULE,"PING STATE: ~p~n",[{A,P,N,S}]),
 
-    #config{newservers=Servers} = cr_log:get_config(node()),
+    #config{newservers=Servers} = cr_log:get_config(cr:node()),
 
     {N,Timer} = lists:keyfind(N,1,Timers),
     case Timer of undefined -> skip; _ -> erlang:cancel_timer(Timer) end,
@@ -73,12 +73,12 @@ handle_info({timer,ping,{A,P},N,S}, State=#state{timers=Timers}) ->
     case change(S,Online,N,Servers) of
          true ->
                  try
-                      case cr_rafter:set_config(node(),{N,Operation}) of
+                      case cr_rafter:set_config(cr:node(),{N,Operation}) of
                            {error,_} -> skip;
                                   _ ->  kvs:info(?MODULE,"Server Config Changed S/T ~p ~p~n",
                                                          [{S,Online},{N,Operation}]) end
                  catch
-                      _:_ -> kvs:info(?MODULE,"CONFIG ERROR",[]) end,
+                      _:Err -> kvs:info(?MODULE,"CONFIG ERROR ~p~n",[Err]) end,
                  ok;
          false -> skip end,
 

@@ -33,7 +33,7 @@ kvs_log({Cmd,Self,[{I,N}|T],Tx}=Message, #state{name=Name}=State) ->
     kvs:info(?MODULE,"XA RECEIVE: ~p~n",[{Id,Message,Name}]),
     Operation = #operation{name=Cmd,body=Message,feed_id=Name,status=pending},
     {ok,Saved} = %kvs:add(Operation#operation{id=kvs:next_id(operation,1)}),
-                 cr_log:kvs_log(node(),Operation),
+                 cr_log:kvs_log(cr:node(),Operation),
     try gen_server:cast(self(),Saved)
     catch E:R -> kvs:info(?MODULE,"LOG ERROR ~p~n",[cr:stack(E,R)]) end.
 
@@ -43,7 +43,7 @@ continuation(Next,{C,S,[{I,N}|T],Tx}=Command,State) ->
     Peer = cr:peer({I,N}),
     Vpid = cr:vpid({I,Peer}),
     case gen_server:cast(Vpid,{pending,Command}) of
-                     ok -> kvs:info("XA SENT OK from ~p to ~p~n",[node(),Peer]), {noreply,State};
+                     ok -> kvs:info("XA SENT OK from ~p to ~p~n",[cr:node(),Peer]), {noreply,State};
                   Error -> timer:sleep(1000),
                            continuation(Next,Command,State) end.
 
@@ -62,7 +62,7 @@ handle_call(Request,_,Proc) ->
 
 handle_cast({client,Client,Chain,Record}, #state{name=Name,storage=Storage}=State) ->
     {I,N} = hd(Chain),
-    Self  = node(),
+    Self  = cr:node(),
     gen_server:cast(case cr:peer({I,N}) of
                          Self -> cr:local(Record);
                          Node -> cr:vpid({I,Node}) end,
@@ -75,7 +75,7 @@ handle_cast({pending,{Cmd,Self,[{I,N}|T],Tx}=Message}, #state{name=Name,storage=
 
 handle_cast(#operation{name=Command,body=Message}=Operation, #state{name=Name,storage=Storage}=State) ->
     {Command,Sender,[H|T]=Chain,Tx} = Message,
-    Replay =   try cr_log:kvs_replay(node(),Operation,State,status(Command))
+    Replay =   try cr_log:kvs_replay(cr:node(),Operation,State,status(Command))
              catch E:R -> kvs:info(?MODULE,"~p REPLAY ~p~n",[code(Command),cr:stack(E,R)]),
                           {rollback, {E,R}, Chain, Tx} end,
     {Forward,Latency} = case [Chain,Replay] of

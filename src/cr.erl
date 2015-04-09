@@ -5,6 +5,9 @@
 -include_lib("db/include/transaction.hrl").
 -include("rafter.hrl").
 -compile(export_all).
+-compile({no_auto_import,[node/0]}).
+
+main(A) -> mad_repl:main(A,[]).
 
 encode(Msg) -> term_to_binary(Msg).
 decode(Bin) -> binary_to_term(Bin).
@@ -15,7 +18,7 @@ send(Pid, Message) when is_pid(Pid)  -> gen_fsm:send_event(Pid, {out, Message}).
 config()       -> {ok,Peers} = application:get_env(cr,peers),
                   N = lists:map(fun({N,_,_,_})->N end,Peers),
                   #config{state=stable,oldservers=N,newservers=N}.
-local(Object)  -> {I,N}=lists:keyfind(cr:nodex(node()),2,cr:chain(Object)),
+local(Object)  -> {I,N}=lists:keyfind(cr:nodex(cr:node()),2,cr:chain(Object)),
                   {I,P,_,_}=lists:keyfind(I,1,supervisor:which_children(vnode_sup)), P.
 secret()       -> application:get_env(cr,secret,<<"ThisIsClassified">>).
 peers()        -> {ok,Peers}=application:get_env(cr,peers),Peers.
@@ -26,6 +29,7 @@ roll(N)        -> lists:seq(N,length(peers())) ++ lists:seq(1,N-1).
 seq(Object)    -> lists:keydelete(0,1,cr_hash:succ(cr_hash:key_of(Object),ring())).
 peer({I,N})    -> element(1,lists:nth(N,peers())).
 nodex(Node)    -> string:str(cr:peers(),[lists:keyfind(Node,1,cr:peers())]).
+node()         -> list_to_atom(lists:concat([os:getenv("NAME"),'@127.0.0.1'])).
 vpid({I,Node}) -> {I,P,_,_}=lists:keyfind(I,1,supervisor:which_children({vnode_sup,Node})), P.
 ring()         -> ring(4).
 ring(C)        -> {Nodes,[{0,1}|Rest]} = cr_hash:fresh(length(peers())*C,1),
@@ -133,7 +137,7 @@ local() -> [{I,P}||{I,P,_,_} <- supervisor:which_children(vnode_sup)].
 % cluster_status checks that all logs on all nodes are ok
 
 consensus_log() ->
-      Entries = cr_log:get_last_index(node()),
+      Entries = cr_log:get_last_index(cr:node()),
       case lists:all(fun({H,_,_,_}) ->
             rpc:call(H,cr_log,get_last_index,[H]) == Entries end,
             cr:peers()) of true -> {ok,Entries};

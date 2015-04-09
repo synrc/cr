@@ -32,7 +32,7 @@ init([Me, #rafter_opts{state_machine=StateMachine,cluster=Nodes}]) ->
                    me=Me,
                    responses=dict:new(),
                    followers=dict:new(),
-                   commit_index = cr_log:get_last_index(node()),
+                   commit_index = cr_log:get_last_index(cr:node()),
                    timer=Timer,
                    state_machine=StateMachine,
                    backend_state=BackendState},
@@ -47,7 +47,7 @@ init([Me, #rafter_opts{state_machine=StateMachine,cluster=Nodes}]) ->
     {ok, follower, NewState}.
 
 stop(Pid) -> gen_fsm:send_all_state_event({Pid,Pid}, stop).
-op(Command) -> gen_fsm:sync_send_event(get_leader(node()), {op, Command}).
+op(Command) -> gen_fsm:sync_send_event(get_leader(cr:node()), {op, Command}).
 op(Peer, Command) -> gen_fsm:sync_send_event({Peer,Peer}, {op, Command}).
 read_op(Peer, Command) -> gen_fsm:sync_send_event({Peer,Peer}, {read_op, Command}).
 set_config(Peer, Config) -> gen_fsm:sync_send_event({Peer,Peer}, {set_config, Config}).
