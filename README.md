@@ -165,7 +165,7 @@ Copyright (c) 2015 Synrc Research Center s.r.o.
 * Maxim Sokhatsky
 * Vladimir Kirillov
 * Sergey Klimenko
-* Valery Maleshkin
+* Valery Meleshkin
 * Victor Sovietov
 
 OM A HUM
