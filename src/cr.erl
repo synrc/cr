@@ -37,6 +37,7 @@ ring(C)        -> {Nodes,[{0,1}|Rest]} = cr_hash:fresh(length(peers())*C,1),
                                 lists:zip(Rest,lists:seq(1,length(Rest))))]}.
 
 chain(Object) ->
+    cr:info(?MODULE,"Object ~p~n",[Object]),
     {N,_} = cr:ring(),
     lists:map(fun(X) -> lists:nth((X-1)*4+1,cr:seq(Object)) end,
               cr:roll(element(2,cr:hash(Object)))).
@@ -123,7 +124,24 @@ rpc(Value) -> Value.
 
 clean() -> kvs:destroy(), kvs:join().
 
-log_modules() -> [cr,cr_log,cr_rafter,cr_heart].
+config(Key)     -> config(cr, Key, "").
+config(App,Key) -> config(App,Key, "").
+config(App, Key, Default) -> case application:get_env(App,Key) of
+                                  undefined -> Default;
+                                     {ok,V} -> V end.
+
+log_modules() -> [cr,cr_log,cr_rafter,cr_heart,cr_vnode].
+-define(ALLOWED, (config(cr,log_modules,cr))).
+
+log(Module, String, Args, Fun) ->
+    case lists:member(Module,?ALLOWED:log_modules()) of
+         true -> error_logger:Fun("~p:"++String, [Module|Args]);
+         false -> skip end.
+
+info(Module, String,   Args) -> log(Module, String, Args, info_msg).
+warning(Module,String, Args) -> log(Module, String, Args, warning_msg).
+error(Module, String,  Args) -> log(Module, String, Args, error_msg).
+
 
 sup()   -> [{T,Pid}||{T,Pid,_,_}<-supervisor:which_children(cr_sup)].
 heart() -> [{_,P,_,_}]=supervisor:which_children(heart_sup), gen_server:call(P,{heart}).
@@ -165,5 +183,3 @@ operation_log() ->
 
 cluster_status() -> {ok,_} = consensus_log(),
                     {ok,_} = operation_log().
-
-

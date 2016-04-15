@@ -23,7 +23,7 @@ init([Name,Nodes]) ->
           {Node,Timer}
       end || {Node,_,P2,_}<-Nodes, Node /= cr:node()],
 
-    kvs:info(?MODULE,"HEART PROTOCOL: started: ~p~n"
+    cr:info(?MODULE,"HEART PROTOCOL: started: ~p~n"
                                    "Nodes: ~p~n",[Name,Timers]),
 
     {ok,#state{name=Name,nodes=Nodes,timers=Timers}}.
@@ -38,11 +38,11 @@ setkey(Name,Pos,List,New) ->
         _Element -> lists:keyreplace(Name,Pos,List,New) end.
 
 handle_info({'EXIT', Pid,_}, #state{} = State) ->
-    kvs:info(?MODULE,"HEART: EXIT~n",[]),
+    cr:info(?MODULE,"HEART: EXIT~n",[]),
     {noreply, State};
 
 handle_info({carrier,lost,N}, State=#state{timers=Timer}) ->
-    kvs:info(?MODULE,"HOST CARRIER LOST ~p~n",[N]),
+    cr:info(?MODULE,"HOST CARRIER LOST ~p~n",[N]),
     {noreply,State};
 
 handle_info({timer,ping,{A,P},N,S}, State=#state{timers=Timers}) ->
@@ -75,28 +75,28 @@ handle_info({timer,ping,{A,P},N,S}, State=#state{timers=Timers}) ->
                  try
                       case cr_rafter:set_config(cr:node(),{N,Operation}) of
                            {error,_} -> skip;
-                                  _ ->  kvs:info(?MODULE,"Server Config Changed S/T ~p~n",
+                                  _ ->  cr:info(?MODULE,"Server Config Changed S/T ~p~n",
                                                          [{N,Operation}]) end
                  catch
-                      _:Err -> kvs:info(?MODULE,"CONFIG ERROR ~p~n",[Err]) end,
+                      _:Err -> cr:info(?MODULE,"CONFIG ERROR ~p~n",[Err]) end,
                  ok;
          false -> skip end,
 
     {noreply,State#state{timers=setkey(N,1,Timers,{N,T})}};
 
 handle_info(_Info, State) ->
-    kvs:info(?MODULE,"HEART: Info ~p~n",[_Info]),
+    cr:info(?MODULE,"HEART: Info ~p~n",[_Info]),
     {noreply, State}.
 
 handle_call({heart},_,Proc) ->
     {reply,Proc,Proc};
 
 handle_call(Request,_,Proc) ->
-    kvs:info(?MODULE,"HEART: Call ~p~n",[Request]),
+    cr:info(?MODULE,"HEART: Call ~p~n",[Request]),
     {reply,ok,Proc}.
 
 handle_cast(Msg, State) ->
-    kvs:info(?MODULE,"HEART: Cast ~p", [Msg]),
+    cr:info(?MODULE,"HEART: Cast ~p", [Msg]),
     {stop, {error, {unknown_cast, Msg}}, State}.
 
 terminate(_Reason, #state{}) -> ok.
