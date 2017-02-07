@@ -155,7 +155,7 @@ Licenses
 --------
 
 * consensus protols 1) raft and 2) paxos are distributed under the terms of Apache 2.0 http://www.apache.org/licenses/LICENSE-2.0.html
-* cr itself is distributed under the DHARMA license: http://5ht.github.io/license.htm
+* cr itself is distributed under the DHARMA license: http://5ht.co/license.htm
 
 Credits
 -------
