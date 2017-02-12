@@ -16,7 +16,7 @@ start_connection(Module,Socket,Nodes) ->
     ChildSpec = { UniqueName, { cr_connection, start_link, [UniqueName,Module,Socket,Nodes]},
         Restart, Shutdown, worker, [Module] },
     Sup = supervisor:start_child(Module:sup(),ChildSpec),
-    kvs:info("SERVER: starting ~p listener: ~p~n",[Sup,{Module,IP,Port,Socket}]),
+    cr:info(?MODULE,"SERVER: starting ~p listener: ~p~n",[Sup,{Module,IP,Port,Socket}]),
     Sup.
 
 listen({socket_ready, Socket}, State) ->
@@ -25,7 +25,7 @@ listen({socket_ready, Socket}, State) ->
     {next_state, transfer, State#state{socket=Socket}, ?TIMEOUT};
 
 listen(Other, State) ->
-    kvs:info(?MODULE,"SERVER: Unexpected message during listening ~p~n", [Other]),
+    cr:info(?MODULE,"SERVER: Unexpected message during listening ~p~n", [Other]),
     {next_state, listen, State, ?TIMEOUT}.
 
 transfer({in,Binary}, #state{state=SubState,module=Module}=State) ->
@@ -44,7 +44,7 @@ transfer(timeout, State) ->
     {stop, normal, State};
 
 transfer(_Data,  State) ->
-    kvs:info("SERVER: unknown Data during transfer: ~p\n", [_Data]),
+    cr:info(?MODULE,"SERVER: unknown Data during transfer: ~p\n", [_Data]),
     {stop, normal, State}.
 
 start_link(Name,Mod,Socket,Nodes) ->
@@ -58,7 +58,7 @@ init([]) ->
     {ok, {SupFlags, []}};
 
 init([Name,Mod,Socket,Nodes]) ->
-    kvs:info(?MODULE,"PROTOCOL: starting ~p listener: ~p~n",[self(),{Name,Mod}]),
+    cr:info(?MODULE,"PROTOCOL: starting ~p listener: ~p~n",[self(),{Name,Mod}]),
     process_flag(trap_exit, true),
     {ok,listen,#state{module=Mod,name=Name,
                       socket=Socket,nodes=Nodes,
@@ -69,15 +69,15 @@ handle_info({tcp, Socket, Bin}, StateName, #state{module=Module,state=SubState} 
     ?MODULE:StateName({in,Bin}, State);
 
 handle_info({tcp_closed,_S}, _, State) ->
-    kvs:info(?MODULE,"SERVER: TCP closed~n",[]),
+    cr:info(?MODULE,"SERVER: TCP closed~n",[]),
     {stop, normal, State};
 
 handle_info({'EXIT', Pid,_}, StateName, #state{} = State) ->
-    kvs:info(?MODULE,"SERVER: EXIT~n",[]),
+    cr:info(?MODULE,"SERVER: EXIT~n",[]),
     {next_state, StateName, State};
 
 handle_info(_Info, StateName, State) ->
-    kvs:info(?MODULE,"SERVER: Info ~p~n",[_Info]),
+    cr:info(?MODULE,"SERVER: Info ~p~n",[_Info]),
     {noreply, StateName, State}.
 
 handle_event(Event, StateName, State) -> {stop, {StateName, undefined_event, Event}, State}.
