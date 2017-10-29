@@ -9,11 +9,11 @@ sup() -> ping_sup.
 init([Name,Mod,Socket,Nodes]) -> #state{socket=Socket,nodes=Nodes}.
 
 dispatch({'join',Object},State)  ->
-    kvs:info(?MODULE,"PING: Join request: ~p~n",[Object]),
+    io:format("PING: Join request: ~p~n",[Object]),
     State;
 
 dispatch({ping},#state{socket=Socket}=State)  ->
-    kvs:info(?MODULE,"PING: Message: ~p~n",[self()]),
+    io:format("PING: Message: ~p~n",[self()]),
     gen_tcp:send(Socket,term_to_binary({pong})),
     State;
 

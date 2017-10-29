@@ -17,7 +17,7 @@ handle_info({inet_async,ListSock,Ref,Message},
     Acceptor = case prim_inet:async_accept(ListSock, -1) of
          {ok, NewRef} -> NewRef;
          {error, Reason} ->
-              kvs:info(?MODULE,"TCP: Accept Error: ~p~n",[Reason]),
+              io:format("TCP: Accept Error: ~p~n",[Reason]),
               Reason end,
     {noreply, State#state{acceptor=Acceptor}};
 
@@ -50,8 +50,8 @@ set_sockopt(ListSock, CliSocket) ->
          {ok, Opts} -> case prim_inet:setopts(CliSocket, Opts) of
 		                    ok -> ok;
                             Error ->
-                                     kvs:info(?MODULE,"TCP OPT Socket Error ~p~n",[Error]),
+                                     io:format("TCP OPT Socket Error ~p~n",[Error]),
                                      gen_tcp:close(CliSocket), Error end;
          Error -> gen_tcp:close(CliSocket),
-                  kvs:info(?MODULE,"TCP Socket Error ~p~n",[Error]),
+                  io:format("TCP Socket Error ~p~n",[Error]),
                   exit({set_sockopt, Error}) end.
