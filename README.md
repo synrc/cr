@@ -42,8 +42,8 @@ Features
 * High-performance non-blocking TCP acceptor
 * Separate endpoints for HEART, CLIENT and SERVER protocols
 * Pure, clean and understandable codebase
-* Article about CR implementation details: http://synrc.com/apps/cr/doc/cr.htm
-* Business Processing Erlang book: http://synrc.com/apps/bpe/doc/book.pdf
+* Article about CR implementation details: http://synrc.space/apps/cr/doc/cr.htm
+* Business Processing Erlang book: http://synrc.space/apps/bpe/doc/book.pdf
 
 Launch
 ------
