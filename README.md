@@ -9,7 +9,7 @@ master reads from failover node, writes should be
 accepted on a reasonable quorum, failover must be followed by recovery, database
 should be able to scale even with the RAM/DISC limitations.
 
-No data should be treated as written otherwise that commited to all replicas.
+No data should be treated as written otherwise that committed to all replicas.
 All this circumstances leads us to chain replication protocol as a simple and natural
 feedback to this challenge.
 
@@ -19,12 +19,12 @@ used before in such products like GFS, HDFS, mongodb, etc. Quorum Intersection
 is another technique used in databases like Cassandra or Amazon Dynamo.
 They mostly provide a consistent distributed repository
 for event tables or for file storage. In banking industry
-we synchronize account balances and need simple and managable
+we synchronize account balances and need simple and manageable
 protocol for storage consistency issuing high demand on system integrity.
 
 There are several classes of error usually implied when dealing with failure detection.
 The most weak class is fail-stop events, when the outage is normal or predictable.
-The second class is crash-failures, the ubnormal terminations and outages. The most strong
+The second class is crash-failures, the abnormal terminations and outages. The most strong
 type of failures are byzantine failures resistant to bit-flips,
 hacked parties or any types of compromising the transaction objects.
 For banking applications the byzantine fault tolerance is desired,
@@ -68,7 +68,7 @@ New record will be applied: 500
 ```
 
 Fore generating sample data, let say 500 transactions you may run with `cr:test(500)`.
-By measuring accepring performance it's like `2000 Req/s`.
+By measuring accepting performance it's like `2000 Req/s`.
 
 ```erlang
 > cr:dump().
@@ -148,7 +148,7 @@ with (2) LINK operation to some feed, such as user account or customer admin lis
 ```
 
 The actiual Erlang business logic, banking transaction from `db` schema
-application is stored under 389 id. So you can easlity grab it unlinked
+application is stored under 389 id. So you can easily grab it unlinked
 as it was stored as atomic PUT.
 
 Licenses
